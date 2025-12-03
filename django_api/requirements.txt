@@ -1,0 +1,5 @@
+Django==5.2.8
+djangorestframework==3.16.1
+python-dateutil==2.9.0.post0
+py3xui==0.5.4
+paramiko==4.0.0

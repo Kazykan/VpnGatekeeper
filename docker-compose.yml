@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  django:
+    build: ./django_api
+    container_name: django_api
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./django_api:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DJANGO_SETTINGS_MODULE=django_api.settings
+      - DATABASE_URL=${DATABASE_URL}
+
+  bot:
+    build: ./bot
+    container_name: aiogram_bot
+    command: python bot.py
+    volumes:
+      - ./bot:/app
+    depends_on:
+      - django
+    environment:
+      - API_URL=http://django:8000
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+
+  miniapp:
+    build: ./miniapp
+    container_name: nextjs_app
+    command: npm run dev
+    volumes:
+      - ./miniapp:/app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - django
+    environment:
+      - API_URL=http://django:8000
+
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:

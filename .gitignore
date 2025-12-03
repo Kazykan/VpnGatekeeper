@@ -1,0 +1,10 @@
+.env
+.mypy_cache/
+__pycache__/
+venv/
+src/marzban_config.json
+src/test.db
+test.db
+.history-memo/2025-11-04.md
+django_api/servers.json
+django_api/amnezia1_id_rsa
