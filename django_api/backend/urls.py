@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from myapp.views import (
+    AllAmneziaStatsView,
     CredentialViewSet,
     PaymentViewSet,
     ServerViewSet,
@@ -17,5 +18,10 @@ router.register(r"servers", ServerViewSet)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path(
+        "api/servers/amnezia-stats/",
+        AllAmneziaStatsView.as_view(),
+        name="all-amnezia-stats",
+    ),
     path("api/", include(router.urls)),
 ]

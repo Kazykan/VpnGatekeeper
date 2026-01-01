@@ -1,0 +1,19 @@
+# Виртуальная среда
+venv/
+.venv/
+
+# База данных SQLite (так как теперь мы используем Postgres)
+*.sqlite3
+
+# Кэш Python
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Логи и IDE
+.vscode/
+.idea/
+.git/
+.gitignore
+*.log

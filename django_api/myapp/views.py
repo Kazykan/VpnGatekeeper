@@ -1,5 +1,8 @@
 import re
 from rest_framework import viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .domain.infrastructure.amnezia_gateway import AmneziaGateway
 from .models import TelegramUser, Payment, Credential, Server
 from .domain.user_service import calculate_new_end_date, calculate_new_end_date_days
 from .serializers import (
@@ -55,3 +58,29 @@ class CredentialViewSet(viewsets.ModelViewSet):
 class ServerViewSet(viewsets.ModelViewSet):
     queryset = Server.objects.all()
     serializer_class = ServerSerializer
+
+class AllAmneziaStatsView(APIView):
+    def get(self, request):
+        # 1. Берем все серверы Amnezia из БД
+        servers = Server.objects.filter(type='amnezia')
+        
+        results = []
+
+        for server in servers:
+            # 2. Опрашиваем каждый сервер
+            gateway = AmneziaGateway(server.api_url)
+            stats = gateway.get_stats()
+            
+            # Формируем структуру ответа для каждого сервера
+            results.append({
+                "id": server.id,
+                "name": server.name,
+                "status": "error" if "error" in stats else "ok",
+                "data": stats
+            })
+            
+        # 3. Отдаем общий JSON
+        return Response({
+            "total_servers": len(results),
+            "servers_stats": results
+        })

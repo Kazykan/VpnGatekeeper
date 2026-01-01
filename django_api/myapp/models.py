@@ -2,7 +2,6 @@ from django.db import models
 from django.utils import timezone
 
 
-# Create your models here.
 class TelegramUser(models.Model):
     name = models.CharField(max_length=100)
     telegram_id = models.BigIntegerField(unique=True)
@@ -13,6 +12,20 @@ class TelegramUser(models.Model):
         blank=True, null=True
     )  # telegram_id пригласившего
     traffic_on = models.BooleanField(default=False)  # флаг "пошёл трафик"
+
+    # НОВЫЕ ПОЛЯ ДЛЯ АВТОПЛАТЕЖЕЙ
+    autopay_enabled = models.BooleanField(
+        default=False, verbose_name="Автопродление включено"
+    )
+    payment_method_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Токен для рекуррентных платежей от провайдера",
+    )
+    last_payment_status = models.CharField(
+        max_length=50, blank=True, null=True
+    )  # Опционально: статус последней попытки автоплатежа
 
     def __str__(self):
         return f"{self.name} ({self.telegram_id})"
@@ -46,6 +59,10 @@ class Payment(models.Model):
 
 
 class Credential(models.Model):
+    """Содержит данные для подключения пользователя к серверу
+    Если пользователь не оплатил тут мы храним оригинальные данные
+    На сервере меняем preshared_key или отключаем юзера"""
+
     user = models.ForeignKey(
         "TelegramUser", on_delete=models.CASCADE, related_name="credentials"
     )
@@ -59,13 +76,16 @@ class Credential(models.Model):
 
 
 class Server(models.Model):
+    id = models.AutoField(primary_key=True)  # Добавьте эту строку
     name = models.CharField(max_length=100)  # удобное имя
-    host = models.CharField(max_length=255)  # IP или домен
-    api_url = models.CharField(max_length=255, blank=True, null=True)
-    api_key = models.CharField(max_length=255, blank=True, null=True)
+    api_url = models.CharField(max_length=255)
     type = models.CharField(
         max_length=20, choices=[("amnezia", "AmneziaWG"), ("xray", "3x-ui")]
     )
+    api_username = models.CharField(max_length=100, blank=True, null=True)
+    api_password = models.CharField(
+        max_length=255, blank=True, null=True
+    )  # Желательно зашифровать
 
     def __str__(self):
         return f"{self.name} ({self.type})"

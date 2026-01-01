@@ -1,6 +1,21 @@
 version: "3.9"
 
 services:
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=django_db
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    ports:
+      - "5432:5432" # Опционально
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_broker
+
   django:
     build: ./django_api
     container_name: django_api
@@ -11,47 +26,51 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - redis
     environment:
-      - DJANGO_SETTINGS_MODULE=django_api.settings
-      - DATABASE_URL=${DATABASE_URL}
+      - POSTGRES_DB=django_db
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - DB_HOST=db
+      - DB_PORT=5432
+      # Не забудьте про Celery, раз мы его обсуждали
+      - CELERY_BROKER_URL=redis://redis:6379/0
 
-  bot:
-    build: ./bot
-    container_name: aiogram_bot
-    command: python bot.py
+  # Новый сервис: Воркер, который будет создавать конфиги на серверах
+  celery_worker:
+    build: ./django_api
+    container_name: celery_worker
+    command: celery -A backend worker --loglevel=info
     volumes:
-      - ./bot:/app
+      - ./django_api:/app
     depends_on:
       - django
+      - redis
     environment:
-      - API_URL=http://django:8000
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - CELERY_BROKER_URL=redis://redis:6379/0
 
-  miniapp:
-    build: ./miniapp
-    container_name: nextjs_app
-    command: npm run dev
-    volumes:
-      - ./miniapp:/app
-    ports:
-      - "3000:3000"
-    depends_on:
-      - django
-    environment:
-      - API_URL=http://django:8000
+  # bot:
+  #   build: ./bot
+  #   container_name: aiogram_bot
+  #   command: python bot.py
+  #   volumes:
+  #     - ./bot:/app
+  #   depends_on:
+  #     - django
+  #   environment:
+  #     - API_URL=http://django:8000
+  #     - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
 
-  db:
-    image: postgres:15
-    container_name: postgres_db
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+  # miniapp:
+  #   build: ./miniapp
+  #   container_name: nextjs_app
+  #   command: npm run dev
+  #   volumes:
+  #     - ./miniapp:/app
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - django
 
 volumes:
   postgres_data:
