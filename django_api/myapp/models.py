@@ -3,14 +3,24 @@ from django.utils import timezone
 
 
 class TelegramUser(models.Model):
+    id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     telegram_id = models.BigIntegerField(unique=True)
-    xray_id = models.CharField(max_length=100, unique=True)
+    xray_id = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+    )
     preshared_key = models.CharField(max_length=255, blank=True, null=True)
-    end_date = models.DateTimeField(default=timezone.now)
-    invited_by = models.BigIntegerField(
-        blank=True, null=True
-    )  # telegram_id пригласившего
+    end_date = models.DateField(null=True, blank=True)
+
+    # Флаги бонусов
+    invited_bonus_given = models.BooleanField(default=False)
+    traffic_bonus_given = models.BooleanField(default=False)
+
+    # telegram_id пригласившего
+    invited_by = models.BigIntegerField(blank=True, null=True)
     traffic_on = models.BooleanField(default=False)  # флаг "пошёл трафик"
 
     # НОВЫЕ ПОЛЯ ДЛЯ АВТОПЛАТЕЖЕЙ
@@ -24,7 +34,9 @@ class TelegramUser(models.Model):
         help_text="Токен для рекуррентных платежей от провайдера",
     )
     last_payment_status = models.CharField(
-        max_length=50, blank=True, null=True
+        max_length=50,
+        blank=True,
+        null=True,
     )  # Опционально: статус последней попытки автоплатежа
 
     def __str__(self):
@@ -32,7 +44,7 @@ class TelegramUser(models.Model):
 
 
 class Payment(models.Model):
-    payment_id = models.AutoField(primary_key=True)
+    id = models.AutoField(primary_key=True)
     user = models.ForeignKey(
         "TelegramUser",  # связь с твоей моделью пользователя
         on_delete=models.CASCADE,
@@ -55,7 +67,7 @@ class Payment(models.Model):
     unique_payload = models.CharField(max_length=255, unique=True)
 
     def __str__(self):
-        return f"Payment {self.payment_id} by {self.user.telegram_id} ({self.status})"
+        return f"Payment {self.id} by {self.user.telegram_id} ({self.status})"
 
 
 class Credential(models.Model):
@@ -63,6 +75,7 @@ class Credential(models.Model):
     Если пользователь не оплатил тут мы храним оригинальные данные
     На сервере меняем preshared_key или отключаем юзера"""
 
+    id = models.AutoField(primary_key=True)
     user = models.ForeignKey(
         "TelegramUser", on_delete=models.CASCADE, related_name="credentials"
     )

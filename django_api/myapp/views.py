@@ -1,10 +1,13 @@
-import re
+from typing import cast
+import logging
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .domain.infrastructure.amnezia_gateway import AmneziaGateway
+from django_filters.rest_framework import DjangoFilterBackend
+
+from myapp.domain.subscription.services import extend_subscription_task
+from myapp.domain.amnezia.services import collect_amnezia_stats
 from .models import TelegramUser, Payment, Credential, Server
-from .domain.user_service import calculate_new_end_date, calculate_new_end_date_days
 from .serializers import (
     TelegramUserSerializer,
     PaymentSerializer,
@@ -12,10 +15,14 @@ from .serializers import (
     ServerSerializer,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class TelegramUserViewSet(viewsets.ModelViewSet):
     queryset = TelegramUser.objects.all()
     serializer_class = TelegramUserSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["telegram_id", "invited_by"]
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -24,29 +31,15 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     def partial_update(self, request, *args, **kwargs):
         response = super().partial_update(request, *args, **kwargs)
-        payment = self.get_object()
+        payment = cast(Payment, self.get_object())
+
+        payment.refresh_from_db()  # ← гарантированно обновлённые данные
+
+        print(f"DEBUG: Status in DB is '{payment.status}'", flush=True)
 
         if payment.status == "success":
-            user = payment.user
-            user.end_date = calculate_new_end_date(
-                user.end_date.strftime("%Y-%m-%d") if user.end_date else None, months
-            )
-            user.save()
-            # если есть пригласивший то добавляем ему 20 дней
-            if user.invited_by:
-                inviter = TelegramUser.objects.filter(
-                    telegram_id=user.invited_by
-                ).first()
-                if inviter:
-                    inviter.end_date = calculate_new_end_date_days(
-                        (
-                            inviter.end_date.strftime("%Y-%m-%d")
-                            if inviter.end_date
-                            else None
-                        ),
-                        20,
-                    )
-                    inviter.save()
+            print("DEBUG: Condition met! Sending task...", flush=True)
+            extend_subscription_task(user_id=payment.user.id, months=payment.months)
         return response
 
 
@@ -59,28 +52,8 @@ class ServerViewSet(viewsets.ModelViewSet):
     queryset = Server.objects.all()
     serializer_class = ServerSerializer
 
+
 class AllAmneziaStatsView(APIView):
     def get(self, request):
-        # 1. Берем все серверы Amnezia из БД
-        servers = Server.objects.filter(type='amnezia')
-        
-        results = []
-
-        for server in servers:
-            # 2. Опрашиваем каждый сервер
-            gateway = AmneziaGateway(server.api_url)
-            stats = gateway.get_stats()
-            
-            # Формируем структуру ответа для каждого сервера
-            results.append({
-                "id": server.id,
-                "name": server.name,
-                "status": "error" if "error" in stats else "ok",
-                "data": stats
-            })
-            
-        # 3. Отдаем общий JSON
-        return Response({
-            "total_servers": len(results),
-            "servers_stats": results
-        })
+        results = collect_amnezia_stats()
+        return Response({"total_servers": len(results), "servers_stats": results})

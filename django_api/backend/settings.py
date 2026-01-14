@@ -14,7 +14,13 @@ SECRET_KEY = "django-insecure-b*#3l)g*r1gf6s1ahqdnnlfpo!t^*h^^i)(q+o51ax_=_f4oql
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "django",  # ← важно
+    "django:8000",  # ← можно, но не обязательно
+    "*",
+]
 
 
 # Application definition
@@ -27,6 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "django_filters",
     "myapp",
 ]
 
@@ -118,6 +125,8 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+
 CELERY_BROKER_URL = "redis://redis:6379/0"
 
 CACHES = {
@@ -126,6 +135,10 @@ CACHES = {
         "LOCATION": "redis://redis:6379/1",  # Используем 1-ю базу (0-я обычно для Celery)
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
+        },
     }
+}
+
+REST_FRAMEWORK = {
+    "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"]
 }
