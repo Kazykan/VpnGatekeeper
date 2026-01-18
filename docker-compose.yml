@@ -63,16 +63,20 @@ services:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - WEB_APP_URL=${WEB_APP_URL}
 
-  # miniapp:
-  #   build: ./miniapp
-  #   container_name: nextjs_app
-  #   command: npm run dev
-  #   volumes:
-  #     - ./miniapp:/app
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - django
+  miniapp:
+    build: ./miniapp
+    container_name: nextjs_app
+    command: npm run dev
+    volumes:
+      - ./miniapp:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+      - django
+    environment:
+      - BOT_TOKEN=${TELEGRAM_TOKEN}
 
 volumes:
   postgres_data:

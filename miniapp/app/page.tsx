@@ -1,0 +1,49 @@
+"use client"
+
+import { useUserStore } from "@/store/useUserStore"
+import { Page, Navbar, Block, Button, Tabbar, TabbarLink } from "konsta/react"
+import { Avatar } from "./components/Avatar"
+import { useSessionStore } from "@/store/useSessionStore"
+
+export default function Home() {
+  const { user, loading, error } = useUserStore()
+
+  const session = useSessionStore((s) => s.session)
+
+  // Если идет загрузка авторизации, показываем экран ожидания
+  if (loading && !user) {
+    return (
+      <Page className="flex items-center justify-center">
+        <p>Загрузка данных Telegram...</p>
+      </Page>
+    )
+  }
+
+  console.log("HOME STATE:", { user, loading, error, session }) // Добавьте этот лог
+
+  return (
+    <Page className="h-screen pb-12">
+      {" "}
+      {/* Добавляем отступ снизу, чтобы контент не уходил под таббар */}
+      <Navbar title="Rufat VPN" right={user && <Avatar user={user} />} />
+      {/* Основной контент */}
+      <div className="flex-1 overflow-y-auto">
+        <Block strong>
+          {" "}
+          {loading && <p>Загрузка…</p>} {error && <p style={{ color: "red" }}>Ошибка: {error}</p>}{" "}
+          {user && <p>Привет, {user.first_name}!</p>}{" "}
+        </Block>
+
+        <Block strong>
+          <Button large>Подключиться</Button>
+        </Block>
+      </div>
+      {/* Таббар теперь просто компонент внизу */}
+      <Tabbar labels className="fixed left-0 bottom-0 w-full">
+        <TabbarLink active icon={<span>🔒</span>} label="VPN" />
+        <TabbarLink icon={<span>📊</span>} label="Статистика" />
+        <TabbarLink icon={<span>⚙️</span>} label="Настройки" />
+      </Tabbar>
+    </Page>
+  )
+}

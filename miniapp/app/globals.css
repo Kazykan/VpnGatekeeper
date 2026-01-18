@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@import "konsta/react/theme.css";
+
+html,
+body,
+#__next {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Чтобы фон всегда был черным в темной теме */
+.dark body {
+  @apply bg-black;
+}
