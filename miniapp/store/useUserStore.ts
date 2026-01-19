@@ -2,9 +2,12 @@ import { create } from "zustand"
 
 export interface User {
   id: number
-  first_name: string
-  last_name?: string
-  username?: string
+  name: string
+  telegram_id: number
+  end_date?: string | null
+  invited_by?: number | null
+  traffic_on: boolean
+  autopay_enabled: boolean
 }
 
 interface UserStore {
@@ -13,7 +16,7 @@ interface UserStore {
   error: string | null
   initData: string
 
-  setUser: (u: User) => void
+  setUser: (u: User | null) => void
   setError: (msg: string) => void
   setLoading: (v: boolean) => void
   setInitData: (v: string) => void

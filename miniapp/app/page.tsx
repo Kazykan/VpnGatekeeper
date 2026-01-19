@@ -4,6 +4,7 @@ import { useUserStore } from "@/store/useUserStore"
 import { Page, Navbar, Block, Button, Tabbar, TabbarLink } from "konsta/react"
 import { Avatar } from "./components/Avatar"
 import { useSessionStore } from "@/store/useSessionStore"
+import { RequireBotRegistration } from "./components/RequireBotRegistration"
 
 export default function Home() {
   const { user, loading, error } = useUserStore()
@@ -11,7 +12,7 @@ export default function Home() {
   const session = useSessionStore((s) => s.session)
 
   // Если идет загрузка авторизации, показываем экран ожидания
-  if (loading && !user) {
+  if (loading) {
     return (
       <Page className="flex items-center justify-center">
         <p>Загрузка данных Telegram...</p>
@@ -19,7 +20,12 @@ export default function Home() {
     )
   }
 
-  console.log("HOME STATE:", { user, loading, error, session }) // Добавьте этот лог
+  if (error === "NOT_REGISTERED") {
+    return <RequireBotRegistration />
+  }
+  if (!user) {
+    return <p>Ошибка: {error}</p>
+  }
 
   return (
     <Page className="h-screen pb-12">
@@ -29,13 +35,8 @@ export default function Home() {
       {/* Основной контент */}
       <div className="flex-1 overflow-y-auto">
         <Block strong>
-          {" "}
-          {loading && <p>Загрузка…</p>} {error && <p style={{ color: "red" }}>Ошибка: {error}</p>}{" "}
-          {user && <p>Привет, {user.first_name}!</p>}{" "}
-        </Block>
-
-        <Block strong>
-          <Button large>Подключиться</Button>
+          <p>Привет, {user.name}!</p>
+          <p>Подписка до: {user.end_date}</p>
         </Block>
       </div>
       {/* Таббар теперь просто компонент внизу */}

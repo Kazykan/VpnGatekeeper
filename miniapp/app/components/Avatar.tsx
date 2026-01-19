@@ -43,7 +43,7 @@ export function Avatar({ user, size = 44 }: AvatarProps) {
     }
   }, [user.id, session])
 
-  const initials = (user.first_name?.[0] || "") + (user.last_name?.[0] || "")
+  const initials = user.name?.[0] || ""
 
   return (
     <div

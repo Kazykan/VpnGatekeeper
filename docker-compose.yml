@@ -19,7 +19,6 @@ services:
   django:
     build: ./django_api
     container_name: django_api
-    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./django_api:/app
     ports:
@@ -36,6 +35,9 @@ services:
       # Не забудьте про Celery, раз мы его обсуждали
       - CELERY_BROKER_URL=redis://redis:6379/0
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_TOKEN}
+      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
+      - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
 
   # Новый сервис: Воркер, который будет создавать конфиги на серверах
   celery_worker:
@@ -66,17 +68,18 @@ services:
   miniapp:
     build: ./miniapp
     container_name: nextjs_app
-    command: npm run dev
-    volumes:
-      - ./miniapp:/app
-      - /app/node_modules
+    command: npm run start
     ports:
       - "3000:3000"
     depends_on:
       - redis
       - django
     environment:
+      - NODE_ENV=production
       - BOT_TOKEN=${TELEGRAM_TOKEN}
-
+      - DJANGO_API_URL=${DJANGO_API_URL}
+      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
+      - TELEGRAM_BOT_URL=${TELEGRAM_BOT_URL}
 volumes:
   postgres_data:

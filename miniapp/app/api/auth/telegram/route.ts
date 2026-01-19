@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { validateInitData } from "@/lib/telegram"
 import { redis } from "@/lib/redis"
+import { DjangoAPI } from "@/lib/django"
 
 export async function POST(req: Request) {
   const { initData } = await req.json()
@@ -28,9 +29,21 @@ export async function POST(req: Request) {
   const session = crypto.randomUUID()
   await redis.set(`session:${session}`, JSON.stringify(user), "EX", 86400)
 
+  // Сразу идем в djnago и получаем данные по пользователю
+  const api = new DjangoAPI()
+  const django_user = await api.getUsersByTelegramId(user.telegram_id)
+
+  // Если пользователь найден → вернуть его
+  if (Array.isArray(django_user) && django_user.length > 0) {
+    const django_first_user = django_user[0]
+    return NextResponse.json({ ok: true, session, django_first_user })
+  }
+
+  // Если нет пользователя то возвращаем false
+
   return NextResponse.json({
-    ok: true,
+    ok: false,
     session,
-    user,
+    django_first_user: null,
   })
 }

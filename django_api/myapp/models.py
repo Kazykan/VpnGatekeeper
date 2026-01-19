@@ -15,7 +15,7 @@ class TelegramUser(models.Model):
     preshared_key = models.CharField(max_length=255, blank=True, null=True)
     end_date = models.DateField(null=True, blank=True)
 
-    # Флаги бонусов
+    # Флаги бонусов пригласившего храним тут
     invited_bonus_given = models.BooleanField(default=False)
     traffic_bonus_given = models.BooleanField(default=False)
 

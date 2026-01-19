@@ -12,6 +12,7 @@ export default function InitTelegram() {
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp
+
     if (!tg) {
       setError("Telegram WebApp API недоступен")
       return
@@ -23,11 +24,10 @@ export default function InitTelegram() {
     const savedSession = localStorage.getItem("session")
     const savedUser = localStorage.getItem("user")
 
-    // Функция для выполнения чистой авторизации через Telegram InitData
     const authorize = async () => {
       const initData = tg.initData
       if (!initData) {
-        setError("Открыть в Telegram")
+        setError("Откройте Mini App внутри Telegram")
         setLoading(false)
         return
       }
@@ -41,14 +41,26 @@ export default function InitTelegram() {
         })
 
         const data = await r.json()
+        console.log("API Response:", data) // <-- ШАГ 2: Что ответил Next.js?
 
-        if (data.session && data.user) {
-          localStorage.setItem("session", data.session)
-          localStorage.setItem("user", JSON.stringify(data.user))
-          setSession(data.session)
-          setUser(data.user)
+        if (!r.ok || !data.session) {
+          setError(data.error || "Ошибка авторизации")
+          return
+        }
+
+        // Сохраняем сессию (токен Redis)
+        localStorage.setItem("session", data.session)
+        setSession(data.session)
+
+        // Проверяем, вернул ли Django пользователя
+        if (data.django_first_user) {
+          console.log("User found:", data.django_first_user) // <-- ШАГ 3: Пришел ли юзер?
+          localStorage.setItem("user", JSON.stringify(data.django_first_user))
+          setUser(data.django_first_user)
         } else {
-          setError("Ошибка авторизации")
+          // Если ok: true, но пользователя в БД нет
+          setError("NOT_REGISTERED")
+          setUser(null)
         }
       } catch (e: any) {
         setError(e.message)
@@ -57,31 +69,14 @@ export default function InitTelegram() {
       }
     }
 
-    // ЛОГИКА ПРОВЕРКИ:
+    // Если есть кэш, доверяем ему временно, но фоново проверяем
     if (savedSession && savedUser) {
-      // 1. Предварительно ставим данные из кэша, чтобы интерфейс не моргал
       setSession(savedSession)
       setUser(JSON.parse(savedUser))
+      setLoading(false)
 
-      // 2. Проверяем, жива ли сессия на сервере (делаем легкий запрос)
-      fetch(`/api/user/photo?user_id=${JSON.parse(savedUser).id}`, {
-        headers: { Authorization: `Bearer ${savedSession}` },
-      })
-        .then((res) => {
-          if (res.status === 401) {
-            console.warn("Сессия истекла в Redis, переавторизация...")
-            localStorage.removeItem("session")
-            localStorage.removeItem("user")
-            authorize() // Сессия протухла — логинимся заново
-          } else {
-            setLoading(false) // Всё ок, сессия валидна
-          }
-        })
-        .catch(() => {
-          setLoading(false) // Ошибка сети, оставляем как есть
-        })
+      // Можно добавить фоновую валидацию здесь, если нужно
     } else {
-      // Данных в кэше нет — логинимся сразу
       authorize()
     }
   }, [setUser, setError, setLoading, setSession])
