@@ -5,6 +5,7 @@ import { Page, Navbar, Block, Button, Tabbar, TabbarLink } from "konsta/react"
 import { Avatar } from "./components/Avatar"
 import { useSessionStore } from "@/store/useSessionStore"
 import { RequireBotRegistration } from "./components/RequireBotRegistration"
+import { Payment } from "./components/Payment"
 
 export default function Home() {
   const { user, loading, error } = useUserStore()
@@ -31,12 +32,21 @@ export default function Home() {
     <Page className="h-screen pb-12">
       {" "}
       {/* Добавляем отступ снизу, чтобы контент не уходил под таббар */}
-      <Navbar title="Rufat VPN" right={user && <Avatar user={user} />} />
+      <Navbar title="Rufat VPN" right={user && session && <Avatar user={user} />} />
       {/* Основной контент */}
       <div className="flex-1 overflow-y-auto">
         <Block strong>
           <p>Привет, {user.name}!</p>
           <p>Подписка до: {user.end_date}</p>
+        </Block>
+
+        {/* Вставляем блок оплаты */}
+        <Payment />
+
+        {/* Дополнительный блок для красоты */}
+        <Block strong inset className="text-center text-xs text-gray-400">
+          При нажатии на тариф вы перейдете в чат с ботом для оплаты через официальный платежный
+          шлюз Telegram.
         </Block>
       </div>
       {/* Таббар теперь просто компонент внизу */}

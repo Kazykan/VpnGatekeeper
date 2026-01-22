@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
   // Сразу идем в djnago и получаем данные по пользователю
   const api = new DjangoAPI()
-  const django_user = await api.getUsersByTelegramId(user.telegram_id)
+  const django_user = await api.getUsersByTelegramId(user.id)
 
   // Если пользователь найден → вернуть его
   if (Array.isArray(django_user) && django_user.length > 0) {

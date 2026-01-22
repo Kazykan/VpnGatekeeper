@@ -19,12 +19,18 @@ export function Avatar({ user, size = 44 }: AvatarProps) {
 
     let isMounted = true
 
-    fetch(`/api/user/photo?user_id=${user.id}`, {
+    fetch(`/api/user/photo?user_id=${user.telegram_id}`, {
       headers: {
         Authorization: `Bearer ${session}`,
       },
     })
       .then(async (r) => {
+        if (r.status === 401) {
+          // Сессия невалидна (та самая ошибка в консоли)
+          localStorage.removeItem("session")
+          // Тут можно вызвать какой-то колбэк на логаут или ре-авторизацию
+          throw new Error("Invalid session")
+        }
         if (!r.ok) throw new Error("Photo not found")
         // Читаем ответ как Blob (бинарные данные картинки)
         const blob = await r.blob()

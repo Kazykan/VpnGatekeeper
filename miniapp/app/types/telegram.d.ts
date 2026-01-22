@@ -3,6 +3,8 @@ interface TelegramWebApp {
   initDataUnsafe: any
   ready: () => void
   expand: () => void
+  openTelegramLink: (url: string) => void
+  close(): void
   disableVerticalSwipe: () => void
   themeParams: any
   BackButton: {

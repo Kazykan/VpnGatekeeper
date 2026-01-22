@@ -68,14 +68,16 @@ services:
   miniapp:
     build: ./miniapp
     container_name: nextjs_app
-    command: npm run start
+    command: npm run dev
+    volumes:
+      - ./miniapp:/app
+      - /app/node_modules
     ports:
       - "3000:3000"
     depends_on:
       - redis
       - django
     environment:
-      - NODE_ENV=production
       - BOT_TOKEN=${TELEGRAM_TOKEN}
       - DJANGO_API_URL=${DJANGO_API_URL}
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
