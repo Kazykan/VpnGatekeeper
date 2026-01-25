@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from myapp.domain.subscription.services import extend_subscription_task
 from myapp.domain.amnezia.services import collect_amnezia_stats
 from .models import TelegramUser, Payment, Credential, Server
+from myapp.domain.infrastructure.yookassa_gateway import create_yookassa_payment
 from .serializers import (
     TelegramUserSerializer,
     PaymentSerializer,
@@ -34,18 +35,56 @@ class PaymentViewSet(viewsets.ModelViewSet):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
 
-    def partial_update(self, request, *args, **kwargs):
-        response = super().partial_update(request, *args, **kwargs)
-        payment = cast(Payment, self.get_object())
+    def create(self, request, *args, **kwargs):
+        telegram_id = request.data.get("telegram_id")
+        amount = request.data.get("amount")
+        pay_type = request.data.get("type")
+        months = int(request.data.get("months", 0))
+        unique_payload = request.data.get("unique_payload")
 
-        payment.refresh_from_db()  # ← гарантированно обновлённые данные
+        if not all([telegram_id, amount, pay_type, unique_payload]):
+            return Response({"error": "Missing fields"}, status=400)
 
-        print(f"DEBUG: Status in DB is '{payment.status}'", flush=True)
+        # Валидация тарифа по ENV
+        from django.conf import settings
 
-        if payment.status == "success":
-            print("DEBUG: Condition met! Sending task...", flush=True)
-            extend_subscription_task(user_id=payment.user.id, months=payment.months)
-        return response
+        tariff = settings.TARIFFS_BY_PRICE.get(int(amount))
+        if not tariff or tariff["type"] != pay_type or tariff["period"] != f"{months}m":
+            return Response({"error": "Invalid tariff"}, status=400)
+
+        # Находим пользователя
+        try:
+            user = TelegramUser.objects.get(telegram_id=telegram_id)
+        except TelegramUser.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+        # Создаём Payment
+        payment = Payment.objects.create(
+            user=user,
+            amount=int(amount),
+            months=months,
+            status="pending",
+            unique_payload=unique_payload,
+        )
+
+        # Создаём платёж в YooKassa
+        yk_payment = create_yookassa_payment(
+            amount_rub=int(amount),
+            description=f"Оплата {months}m {pay_type}",
+            save_method=(pay_type == "sub"),
+            metadata={"payment_id": payment.id, "unique_payload": unique_payload},
+        )
+
+        payment.provider_payment_id = yk_payment.id
+        payment.save()
+
+        return Response(
+            {
+                "payment_id": payment.id,
+                "confirmation_url": yk_payment.confirmation.confirmation_url,
+            },
+            status=201,
+        )
 
 
 class CredentialViewSet(viewsets.ModelViewSet):

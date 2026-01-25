@@ -9,3 +9,4 @@ psycopg2-binary==2.9.11
 django-redis
 django-filter==25.2
 djangorestframework_simplejwt==5.5.1
+yookassa==3.9.0
