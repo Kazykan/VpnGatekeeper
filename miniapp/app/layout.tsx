@@ -11,6 +11,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="ru" className="dark" suppressHydrationWarning>
       <body className="bg-black">
         <Script src="https://telegram.org/js/telegram-web-app.js?56" strategy="beforeInteractive" />
+        {/* <Script
+          src="https://yookassa.ru/checkout-widget/v1/checkout-widget.js"
+          strategy="beforeInteractive"
+        /> */}
         <App theme="ios" dark={true}>
           <InitTelegram />
           {children}

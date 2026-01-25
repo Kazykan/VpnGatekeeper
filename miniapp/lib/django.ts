@@ -124,4 +124,19 @@ export class DjangoAPI {
   async getUsersByInvitedBy(invitedBy: number) {
     return this.request(`${this.base}/api/users/?invited_by=${invitedBy}`)
   }
+
+  async createPayment(params: {
+    telegram_id: number
+    amount: number
+    type: string
+    months: number
+    unique_payload: string
+  }) {
+    console.log("createPayment" + params)
+    return this.request(`${this.base}/api/payments/create/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    })
+  }
 }

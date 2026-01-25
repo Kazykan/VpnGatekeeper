@@ -1,10 +1,12 @@
+import uuid
 from aiogram import Router, types
 from aiogram.filters import Command, CommandObject
+from bot.utils.tariffs import TARIFFS, period_to_months
 from keyboards.menu_kb import miniapp_keyboard
-from utils.api import register_user, user_exists
+from utils.api import DjangoAPI
 
 router = Router()
-
+django_api = DjangoAPI()
 
 def register_start_handlers(dp):
     dp.include_router(router)
@@ -25,7 +27,7 @@ async def cmd_start(message: types.Message, command: CommandObject):
     args = command.args  # Параметры после ?start=
 
     # 1. Сначала проверяем, есть ли пользователь в базе
-    is_registered = await user_exists(tg_id=tg_id)
+    is_registered = await django_api.user_exists(tg_id=tg_id)
 
     # 2. Обработка аргументов (если они есть)
     if args:
@@ -39,13 +41,26 @@ async def cmd_start(message: types.Message, command: CommandObject):
 
                 # Если по какой-то причине юзера нет в БД, регистрируем без реферала
                 if not is_registered:
-                    await register_user(tg_id=tg_id, name=name, invited_by=None)
+                    await django_api.register_user(tg_id=tg_id, name=name, invited_by=None)
 
                 await message.answer(
                     f"💳 Вы выбрали тариф: {amount}₽ ({'подписка' if pay_type == 'sub' else 'разово'})"
                 )
                 # Здесь вызывай свою функцию оплаты:
-                # await send_my_payment_invoice(message, amount, pay_type)
+                amount = int(parts[1])
+                tariff = TARIFFS.get(amount)
+                if not tariff:
+                    await message.answer("Тариф не найден.")
+                    return
+                months = period_to_months(tariff["period"])
+                unique_payload = f"{uuid.uuid4()}-{tg_id}-{months}-{amount}"
+                resp = await django_api.create_payment( 
+                    tg_id=tg_id, 
+                    amount=amount,
+                    pay_type=tariff["type"],
+                    months=months,
+                    unique_payload=unique_payload, ) 
+                confirmation_url = resp.get("confirmation_url") # отправляешь кнопку с confirmation_url
                 return
             except (IndexError, ValueError):
                 await message.answer("Ошибка в параметрах оплаты.")
