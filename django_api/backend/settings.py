@@ -127,6 +127,8 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
+YOOKASSA_API_KEY = os.getenv("YOOKASSA_API_KEY")
 
 CELERY_BROKER_URL = "redis://redis:6379/0"
 

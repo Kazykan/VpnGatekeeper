@@ -1,12 +1,11 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import Script from "next/script"
+import React, { useEffect } from "react"
 
-type Props = {
+interface Props {
   confirmationToken: string
-  onSuccess?: () => void
-  onError?: (error: any) => void
+  onSuccess: () => void
+  onError: (error: any) => void
 }
 
 declare global {
@@ -15,52 +14,58 @@ declare global {
   }
 }
 
-export default function YooKassaWidget({ confirmationToken, onSuccess, onError }: Props) {
-  const widgetRef = useRef<HTMLDivElement>(null)
-
+const YooKassaWidget: React.FC<Props> = ({ confirmationToken, onSuccess, onError }) => {
   useEffect(() => {
-    if (!window.YooMoneyCheckoutWidget) return
-    if (!confirmationToken) return
+    // 1. Функция инициализации
+    const initWidget = () => {
+      if (window.YooMoneyCheckoutWidget) {
+        const checkout = new window.YooMoneyCheckoutWidget({
+          confirmation_token: confirmationToken,
+          full_size: true, // виджет займет весь контейнер
+          error_callback: (error: any) => {
+            console.error("Yookassa Widget Error:", error)
+            onError(error)
+          },
+        })
 
-    try {
-      const checkout = new window.YooMoneyCheckoutWidget({
-        confirmation_token: confirmationToken,
-        error_callback: (error: any) => {
-          console.error("YooKassa error:", error)
-          onError?.(error)
-        },
-        return_url: "https://t.me/your_bot",
-      })
+        checkout.on("success", () => {
+          onSuccess()
+        })
 
-      checkout.render(widgetRef.current)
+        checkout.on("fail", () => {
+          onError(new Error("Payment failed"))
+        })
 
-      checkout.on("success", () => {
-        onSuccess?.()
-      })
-    } catch (e) {
-      console.error("Widget init error:", e)
-      onError?.(e)
+        // Рендерим в div с id="payment-form"
+        checkout.render("payment-form")
+      }
+    }
+
+    // 2. Проверяем, загружен ли уже скрипт
+    if (document.getElementById("yookassa-script")) {
+      initWidget()
+      return
+    }
+
+    // 3. Если нет — загружаем динамически
+    const script = document.createElement("script")
+    script.id = "yookassa-script"
+    script.src = "https://yookassa.ru/checkout-widget/v1/checkout-widget.js"
+    script.async = true
+    script.onload = initWidget
+    script.onerror = () => onError(new Error("Не удалось загрузить скрипт ЮKassa"))
+    document.body.appendChild(script)
+
+    return () => {
+      // Очищать скрипт не обязательно, чтобы не загружать заново при смене тарифа
     }
   }, [confirmationToken])
 
   return (
-    <>
-      {/* Надёжная загрузка скрипта */}
-      <Script
-        src="https://yookassa.ru/checkout-widget/v1/checkout-widget.js"
-        strategy="afterInteractive"
-        onLoad={() => console.log("YooKassa widget loaded")}
-      />
-
-      <div
-        ref={widgetRef}
-        style={{
-          width: "100%",
-          minHeight: "420px",
-          display: "flex",
-          justifyContent: "center",
-        }}
-      />
-    </>
+    <div className="w-full bg-white p-2 rounded-lg">
+      <div id="payment-form" className="min-h-[400px] w-full" />
+    </div>
   )
 }
+
+export default YooKassaWidget

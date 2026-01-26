@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import { useState } from "react"
 import {
   Segmented,
   SegmentedButton,
@@ -12,11 +12,11 @@ import {
   DialogButton,
 } from "konsta/react"
 import { useUserStore } from "@/store/useUserStore"
-import { DjangoAPI } from "@/lib/django"
 import YooKassaWidget from "./YooKassaWidget"
 
 export function Payment() {
   const [activeSegmented, setActiveSegmented] = useState(2)
+  const [isChecking, setIsChecking] = useState(false);
 
   // 👉 состояния для виджета
   const [showWidget, setShowWidget] = useState(false)
@@ -53,33 +53,40 @@ export function Payment() {
       return
     }
 
-    const djangoApi = new DjangoAPI()
-
     try {
-      const resp = await djangoApi.createPayment({
-        telegram_id: user.telegram_id,
-        amount: tariff.amount,
-        type: tariff.type,
-        months: tariff.months,
-        unique_payload: crypto.randomUUID(),
+      // 👉 Делаем запрос к нашему внутреннему API Next.js (Proxy)
+      const response = await fetch("/api/payments/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          telegram_id: user.telegram_id,
+          amount: tariff.amount,
+          type: tariff.type,
+          months: tariff.months,
+          unique_payload: crypto.randomUUID(),
+        }),
       })
 
-      if (!resp.confirmation_token) {
-        setErrorDialog({
-          opened: true,
-          message: "Ошибка: Django не вернул confirmation_token",
-        })
-        return
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || `Ошибка сервера: ${response.status}`)
       }
 
-      // 👉 показываем виджет
-      setToken(resp.confirmation_token)
+      if (!data.confirmation_token) {
+        throw new Error("Сервер не вернул токен оплаты")
+      }
+
+      // Показываем виджет YooKassa
+      setToken(data.confirmation_token)
       setShowWidget(true)
-    } catch (e) {
-      console.error(e, JSON.stringify(e))
+    } catch (e: any) {
+      console.error("Payment Error:", e)
       setErrorDialog({
         opened: true,
-        message: `Ошибка при создании платежа ${JSON.stringify(e)}`,
+        message: e.message || "Не удалось создать платеж. Попробуйте позже.",
       })
     }
   }
@@ -143,7 +150,7 @@ export function Payment() {
           Выбранный тариф
         </BlockTitle>
 
-        <Card strong inset className="!m-0">
+        <Card className="!m-0">
           <div className="flex flex-col items-center py-6 text-center min-h-[140px] justify-center">
             {activeSegmented === 1 && (
               <>

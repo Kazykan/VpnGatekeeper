@@ -10,6 +10,7 @@ from myapp.domain.subscription.services import extend_subscription_task
 from myapp.domain.amnezia.services import collect_amnezia_stats
 from .models import TelegramUser, Payment, Credential, Server
 from myapp.domain.infrastructure.yookassa_gateway import create_yookassa_payment
+from django.conf import settings
 from .serializers import (
     TelegramUserSerializer,
     PaymentSerializer,
@@ -35,7 +36,11 @@ class PaymentViewSet(viewsets.ModelViewSet):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
 
-    def create(self, request, *args, **kwargs):
+
+class CreatePaymentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
         telegram_id = request.data.get("telegram_id")
         amount = request.data.get("amount")
         pay_type = request.data.get("type")
@@ -46,11 +51,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return Response({"error": "Missing fields"}, status=400)
 
         # Валидация тарифа по ENV
-        from django.conf import settings
 
-        tariff = settings.TARIFFS_BY_PRICE.get(int(amount))
-        if not tariff or tariff["type"] != pay_type or tariff["period"] != f"{months}m":
-            return Response({"error": "Invalid tariff"}, status=400)
+        # tariff = settings.TARIFFS_BY_PRICE.get(int(amount))
+        # if not tariff or tariff["type"] != pay_type or tariff["period"] != f"{months}m":
+        #     return Response({"error": "Invalid tariff"}, status=400)
 
         # Находим пользователя
         try:
@@ -81,7 +85,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 "payment_id": payment.id,
-                "confirmation_url": yk_payment.confirmation.confirmation_url,
+                "confirmation_token": yk_payment.confirmation.confirmation_token,
             },
             status=201,
         )
