@@ -1,4 +1,4 @@
-// lib/django.ts
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios"
 
 type TokenPair = {
   access: string
@@ -6,123 +6,142 @@ type TokenPair = {
 }
 
 export class DjangoAPI {
-  private base: string
+  private api: AxiosInstance
   private username: string
   private password: string
 
   private accessToken: string | null = null
   private refreshToken: string | null = null
-  private isAuthenticating = false
+  private isRefreshing = false
+
+  // Очередь для запросов, которые ждут обновления токена
+  private failedQueue: any[] = []
 
   constructor() {
-    this.base = process.env.DJANGO_API_URL || "http://localhost:8000"
     this.username = process.env.DJANGO_SUPERUSER_USERNAME || ""
     this.password = process.env.DJANGO_SUPERUSER_PASSWORD || ""
-  }
 
-  // -----------------------------
-  // 1. Авторизация (один раз)
-  // -----------------------------
-  private async loginOnce() {
-    if (this.accessToken || this.isAuthenticating) return
-
-    this.isAuthenticating = true
-
-    const res = await fetch(`${this.base}/api/token/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: this.username,
-        password: this.password,
-      }),
-    })
-
-    if (!res.ok) {
-      this.isAuthenticating = false
-      throw new Error("Ошибка авторизации в Django API")
-    }
-
-    const data: TokenPair = await res.json()
-    this.accessToken = data.access
-    this.refreshToken = data.refresh
-    this.isAuthenticating = false
-  }
-
-  // -----------------------------
-  // 2. Обновление токена
-  // -----------------------------
-  private async refreshAccessToken() {
-    if (!this.refreshToken) return this.loginOnce()
-
-    const res = await fetch(`${this.base}/api/token/refresh/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh: this.refreshToken }),
-    })
-
-    if (!res.ok) {
-      // refresh истёк → логинимся заново
-      const errorData = await res.text()
-      console.error(`🔴 Django API Error [${res.status}]`)
-      console.error(`Детали:`, errorData)
-      return this.loginOnce()
-    }
-
-    const data = await res.json()
-    this.accessToken = data.access
-  }
-
-  // -----------------------------
-  // 3. Универсальный запрос
-  // -----------------------------
-  private async request(url: string, options: RequestInit = {}) {
-    if (!this.accessToken) {
-      await this.loginOnce()
-    }
-
-    const res = await fetch(url, {
-      ...options,
+    // 1. Создаем экземпляр Axios с базовыми настройками
+    this.api = axios.create({
+      baseURL: process.env.DJANGO_API_URL || "http://localhost:8000",
       headers: {
-        ...(options.headers || {}),
-        Authorization: `Bearer ${this.accessToken}`,
+        "Content-Type": "application/json",
       },
     })
 
-    // Если токен истёк → обновляем и повторяем запрос
-    if (res.status === 401) {
-      await this.refreshAccessToken()
+    // 2. Интерцептор ЗАПРОСА: подкладывает токен перед отправкой
+    this.api.interceptors.request.use(
+      (config) => {
+        if (this.accessToken) {
+          config.headers.Authorization = `Bearer ${this.accessToken}`
+        }
+        return config
+      },
+      (error) => Promise.reject(error)
+    )
 
-      const retry = await fetch(url, {
-        ...options,
-        headers: {
-          ...(options.headers || {}),
-          Authorization: `Bearer ${this.accessToken}`,
-        },
-      })
+    // 3. Интерцептор ОТВЕТА: ловит 401 ошибку и обновляет токен
+    this.api.interceptors.response.use(
+      (response) => response, // Если всё ок, просто возвращаем данные
+      async (error) => {
+        const originalRequest = error.config
 
-      if (!retry.ok) {
-        throw new Error(`Ошибка запроса после refresh: ${retry.status}`)
+        // Если ошибка 401 и это не повторный запрос
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          // Если мы уже в процессе обновления — ставим запрос в очередь
+          if (this.isRefreshing) {
+            return new Promise((resolve, reject) => {
+              this.failedQueue.push({ resolve, reject })
+            })
+              .then((token) => {
+                originalRequest.headers.Authorization = `Bearer ${token}`
+                return this.api(originalRequest)
+              })
+              .catch((err) => Promise.reject(err))
+          }
+
+          originalRequest._retry = true
+          this.isRefreshing = true
+
+          try {
+            // Пытаемся обновить токен
+            const newAccessToken = await this.refreshAccessToken()
+            this.processQueue(null, newAccessToken)
+
+            // Повторяем изначальный запрос с новым токеном
+            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+            return this.api(originalRequest)
+          } catch (refreshError) {
+            this.processQueue(refreshError, null)
+            return Promise.reject(refreshError)
+          } finally {
+            this.isRefreshing = false
+          }
+        }
+
+        return Promise.reject(error)
       }
-
-      return retry.json()
-    }
-
-    if (!res.ok) {
-      throw new Error(`Ошибка запроса: ${res.status}`)
-    }
-
-    return res.json()
+    )
   }
 
-  // -----------------------------
-  // 4. Твои API методы
-  // -----------------------------
+  /**
+   * Вспомогательный метод для обработки очереди ожидания
+   */
+  private processQueue(error: any, token: string | null = null) {
+    this.failedQueue.forEach((prom) => {
+      if (error) prom.reject(error)
+      else prom.resolve(token)
+    })
+    this.failedQueue = []
+  }
+
+  /**
+   * Логика получения первой пары токенов
+   */
+  private async login() {
+    const res = await this.api.post<TokenPair>("/api/token/", {
+      username: this.username,
+      password: this.password,
+    })
+    this.accessToken = res.data.access
+    this.refreshToken = res.data.refresh
+    return res.data.access
+  }
+
+  /**
+   * Обновление accessToken через refreshToken
+   */
+  private async refreshAccessToken(): Promise<string> {
+    try {
+      if (!this.refreshToken) return this.login()
+
+      const res = await axios.post(`${this.api.defaults.baseURL}/api/token/refresh/`, {
+        refresh: this.refreshToken,
+      })
+
+      this.accessToken = res.data.access
+      return res.data.access
+    } catch (e) {
+      // Если refresh тоже протух — полный перелогин
+      return this.login()
+    }
+  }
+
+  // --- Публичные методы API ---
+
   async getUsersByTelegramId(telegramId: number) {
-    return this.request(`${this.base}/api/users/?telegram_id=${telegramId}`)
+    // Больше не нужно писать res.json() или ловить статусы вручную
+    const res = await this.api.get(`/api/users/`, {
+      params: { telegram_id: telegramId },
+    })
+    return res.data
   }
 
   async getUsersByInvitedBy(invitedBy: number) {
-    return this.request(`${this.base}/api/users/?invited_by=${invitedBy}`)
+    const res = await this.api.get(`/api/users/`, {
+      params: { invited_by: invitedBy },
+    })
+    return res.data
   }
 
   async createPayment(params: {
@@ -132,11 +151,8 @@ export class DjangoAPI {
     months: number
     unique_payload: string
   }) {
-    console.log("createPayment" + params)
-    return this.request(`${this.base}/api/payments/create/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
-    })
+    // Axios сам сделает JSON.stringify
+    const res = await this.api.post(`${this.api.defaults.baseURL}/api/payments/create/`, params)
+    return res.data
   }
 }

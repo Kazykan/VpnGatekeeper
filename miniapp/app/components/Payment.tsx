@@ -10,19 +10,26 @@ import {
   Card,
   Dialog,
   DialogButton,
+  Preloader,
 } from "konsta/react"
 import { useUserStore } from "@/store/useUserStore"
 import YooKassaWidget from "./YooKassaWidget"
+import { api } from "@/lib/api"
+
+interface CreatePaymentResponse {
+  payment_id: number
+  confirmation_token: string
+}
+
+interface UserCheckResponse {
+  is_premium: boolean
+}
 
 export function Payment() {
   const [activeSegmented, setActiveSegmented] = useState(2)
-  const [isChecking, setIsChecking] = useState(false);
-
-  // 👉 состояния для виджета
+  const [isChecking, setIsChecking] = useState(false)
   const [showWidget, setShowWidget] = useState(false)
   const [token, setToken] = useState<string | null>(null)
-
-  // 👉 состояние для Konsta UI Alert
   const [errorDialog, setErrorDialog] = useState({
     opened: false,
     message: "",
@@ -30,23 +37,37 @@ export function Payment() {
 
   const { user, loading, error } = useUserStore()
 
-  // 👉 безопасная загрузка
-  if (loading) {
-    return <div className="p-4 text-center text-gray-400">Загрузка…</div>
-  }
-  if (error) {
-    return <div className="p-4 text-center text-red-500">Ошибка: {error}</div>
-  }
-  if (!user) {
-    return <div className="p-4 text-center text-gray-400">Пользователь не найден</div>
+  // 1. Функция проверки статуса (Polling)
+  const verifyPayment = async () => {
+    const interval = setInterval(async () => {
+      try {
+        // Используем наш типизированный api
+        const userData = await api.get<UserCheckResponse>(`/api/user/check`, {
+          params: { telegram_id: user?.telegram_id },
+        })
+
+        if (userData?.is_premium) {
+          clearInterval(interval)
+          setIsChecking(false)
+          alert("Оплата прошла успешно! Подписка активирована.")
+        }
+      } catch (e) {
+        console.error("Ошибка проверки", e)
+      }
+    }, 3000)
+
+    setTimeout(() => clearInterval(interval), 120000)
   }
 
+  // 2. Функция создания платежа
   const handlePayment = async () => {
+    if (!user) return
+
     const tariff = {
       1: { amount: 80, type: "once", months: 1 },
       2: { amount: 70, type: "sub", months: 1 },
       3: { amount: 210, type: "once", months: 3 },
-    }[activeSegmented]
+    }[activeSegmented as 1 | 2 | 3]
 
     if (!tariff) {
       setErrorDialog({ opened: true, message: "Ошибка: тариф не найден" })
@@ -54,81 +75,77 @@ export function Payment() {
     }
 
     try {
-      // 👉 Делаем запрос к нашему внутреннему API Next.js (Proxy)
-      const response = await fetch("/api/payments/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          telegram_id: user.telegram_id,
-          amount: tariff.amount,
-          type: tariff.type,
-          months: tariff.months,
-          unique_payload: crypto.randomUUID(),
-        }),
+      const data = await api.post<CreatePaymentResponse>("/api/payments/create", {
+        telegram_id: user.telegram_id,
+        amount: tariff.amount,
+        type: tariff.type,
+        months: tariff.months,
+        unique_payload: crypto.randomUUID(),
       })
 
-      const data = await response.json()
+      console.log("Данные платежа получены:", data); // ДОБАВЬ ЭТО
 
-      if (!response.ok) {
-        throw new Error(data.error || `Ошибка сервера: ${response.status}`)
-      }
-
-      if (!data.confirmation_token) {
-        throw new Error("Сервер не вернул токен оплаты")
-      }
-
-      // Показываем виджет YooKassa
       setToken(data.confirmation_token)
       setShowWidget(true)
     } catch (e: any) {
-      console.error("Payment Error:", e)
-      setErrorDialog({
-        opened: true,
-        message: e.message || "Не удалось создать платеж. Попробуйте позже.",
-      })
+      const errorMsg = e.response?.data?.error || "Ошибка при создании платежа"
+      setErrorDialog({ opened: true, message: errorMsg })
     }
+  } // <--- ВОТ ЭТА СКОБКА БЫЛА ПРОПУЩЕНА
+
+  // --- РЕНДЕР: СОСТОЯНИЯ ЗАГРУЗКИ ---
+
+  if (loading) {
+    return <div className="p-8 text-center text-gray-400">Загрузка данных пользователя...</div>
   }
 
-  // 👉 если виджет активен — показываем только его
+  if (error) {
+    return <div className="p-8 text-center text-red-500">Ошибка: {error}</div>
+  }
+
+  if (!user) {
+    return <div className="p-8 text-center text-gray-400">Пользователь не найден</div>
+  }
+
+  if (isChecking) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center">
+        <Preloader className="mb-4" />
+        <h3 className="text-lg font-bold">Обработка оплаты</h3>
+        <p className="text-sm opacity-60">
+          Мы получили подтверждение и активируем вашу подписку. Пожалуйста, не закрывайте окно.
+        </p>
+      </div>
+    )
+  }
+
   if (showWidget && token) {
     return (
-      <>
-        <div className="mt-4">
+      <div className="flex flex-col min-h-screen">
+        <div className="p-4 border-b">
+          <Button clear onClick={() => setShowWidget(false)}>
+            ← Назад к тарифам
+          </Button>
+        </div>
+        <div className="flex-1">
           <YooKassaWidget
             confirmationToken={token}
             onSuccess={() => {
               setShowWidget(false)
+              setIsChecking(true)
+              verifyPayment()
             }}
             onError={(err) => {
               console.error(err)
-              setErrorDialog({
-                opened: true,
-                message: "Ошибка оплаты",
-              })
+              setErrorDialog({ opened: true, message: "Ошибка оплаты" })
               setShowWidget(false)
             }}
           />
         </div>
-
-        {/* Диалог ошибок */}
-        <Dialog
-          opened={errorDialog.opened}
-          onBackdropClick={() => setErrorDialog({ opened: false, message: "" })}
-          title="Ошибка"
-          content={errorDialog.message}
-          buttons={
-            <DialogButton strong onClick={() => setErrorDialog({ opened: false, message: "" })}>
-              OK
-            </DialogButton>
-          }
-        />
-      </>
+      </div>
     )
   }
 
-  // 👉 обычный UI тарифов
   return (
     <>
       <div className="w-full overflow-hidden">
@@ -206,7 +223,6 @@ export function Payment() {
         </div>
       </div>
 
-      {/* Диалог ошибок */}
       <Dialog
         opened={errorDialog.opened}
         onBackdropClick={() => setErrorDialog({ opened: false, message: "" })}

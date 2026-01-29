@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 
+from myapp.tasks.check_payment import check_payment_status
 from myapp.domain.subscription.services import extend_subscription_task
 from myapp.domain.amnezia.services import collect_amnezia_stats
 from .models import TelegramUser, Payment, Credential, Server
@@ -39,6 +40,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
 class CreatePaymentView(APIView):
     permission_classes = [IsAuthenticated]
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["provider_payment_id", "unique_payload"]
 
     def post(self, request, *args, **kwargs):
         telegram_id = request.data.get("telegram_id")
@@ -81,6 +86,10 @@ class CreatePaymentView(APIView):
 
         payment.provider_payment_id = yk_payment.id
         payment.save()
+
+        # ЗАПУСК CELERY: Проверить через 10 минут, если вебхук не придет
+        # Передаем именно внутренний ID нашей записи в БД
+        check_payment_status.apply_async((payment.id,), countdown=600)
 
         return Response(
             {

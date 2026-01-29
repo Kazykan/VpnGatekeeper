@@ -21,8 +21,8 @@ ALLOWED_HOSTS = [
     "django",  # ← важно
     "django:8000",  # ← можно, но не обязательно
     "*",
+    "djangoapi.kocherbaev.ru",
 ]
-
 
 # Application definition
 
@@ -153,3 +153,7 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True

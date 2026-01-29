@@ -53,6 +53,8 @@ services:
       - redis
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
+      - YOOKASSA_API_KEY=${YOOKASSA_API_KEY}
+      - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
 
   bot:
     build: ./bot
@@ -63,7 +65,7 @@ services:
     depends_on:
       - django
     environment:
-      - API_URL=http://django:8000
+      - API_URL=${DJANGO_API_URL}
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - WEB_APP_URL=${WEB_APP_URL}
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}

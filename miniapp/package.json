@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "autoprefixer": "^10.4.23",
+    "axios": "^1.13.3",
     "ioredis": "^5.9.2",
     "konsta": "^5.0.6",
     "next": "16.1.1",

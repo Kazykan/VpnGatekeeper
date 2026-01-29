@@ -1,8 +1,10 @@
 # myapp/views_webhooks.py
+import json
+from myapp.domain.subscription.services import extend_subscription_task
 from myapp.models import Payment
 from rest_framework.views import APIView
 from rest_framework.response import Response
-import json
+from myapp.domain.infrastructure.telegram_gateway import send_message
 
 
 class YooKassaWebhookView(APIView):
@@ -48,7 +50,6 @@ class YooKassaWebhookView(APIView):
             )
 
         # Уведомить пользователя в Telegram
-        from myapp.domain.infrastructure.telegram_gateway import send_message
 
         send_message(
             payment.user.telegram_id, "✅ Оплата прошла. Подписка активирована."
