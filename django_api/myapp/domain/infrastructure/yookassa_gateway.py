@@ -1,5 +1,5 @@
 import uuid
-from yookassa import Payment, Configuration
+from yookassa import Payment as YkPayment, Configuration
 from django.conf import settings
 
 
@@ -26,4 +26,16 @@ def create_yookassa_payment(
 
     # 4. Вызываем создание платежа.
     # Теперь передается ровно 2 позиционных аргумента.
-    return Payment.create(payment_data, idempotency_key)
+    return YkPayment.create(payment_data, idempotency_key)
+
+
+def create_recurring_payment(amount_rub, payment_method_id, description, metadata):
+    return YkPayment.create(
+        {
+            "amount": {"value": str(amount_rub), "currency": "RUB"},
+            "capture": True,  # Списываем сразу
+            "payment_method_id": payment_method_id,
+            "description": description,
+            "metadata": metadata,
+        }
+    )

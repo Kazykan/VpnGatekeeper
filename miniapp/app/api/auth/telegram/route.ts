@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { validateInitData } from "@/lib/telegram"
 import { redis } from "@/lib/redis"
-import { DjangoAPI } from "@/lib/django"
+import djangoApi from "@/lib/django"
 
 export async function POST(req: Request) {
   const { initData } = await req.json()
@@ -30,8 +30,7 @@ export async function POST(req: Request) {
   await redis.set(`session:${session}`, JSON.stringify(user), "EX", 86400)
 
   // Сразу идем в djnago и получаем данные по пользователю
-  const api = new DjangoAPI()
-  const django_user = await api.getUsersByTelegramId(user.id)
+  const django_user = await djangoApi.getUsersByTelegramId(user.id)
 
   // Если пользователь найден → вернуть его
   if (Array.isArray(django_user) && django_user.length > 0) {

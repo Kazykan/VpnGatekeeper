@@ -5,8 +5,9 @@ type TokenPair = {
   refresh: string
 }
 
-export class DjangoAPI {
+class DjangoAPI {
   private api: AxiosInstance
+  private plainApi: AxiosInstance
   private username: string
   private password: string
 
@@ -29,6 +30,13 @@ export class DjangoAPI {
       },
     })
 
+    this.plainApi = axios.create({
+      baseURL: this.api.defaults.baseURL,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+
     // 2. Интерцептор ЗАПРОСА: подкладывает токен перед отправкой
     this.api.interceptors.request.use(
       (config) => {
@@ -37,7 +45,7 @@ export class DjangoAPI {
         }
         return config
       },
-      (error) => Promise.reject(error)
+      (error) => Promise.reject(error),
     )
 
     // 3. Интерцептор ОТВЕТА: ловит 401 ошибку и обновляет токен
@@ -80,7 +88,7 @@ export class DjangoAPI {
         }
 
         return Promise.reject(error)
-      }
+      },
     )
   }
 
@@ -115,7 +123,7 @@ export class DjangoAPI {
     try {
       if (!this.refreshToken) return this.login()
 
-      const res = await axios.post(`${this.api.defaults.baseURL}/api/token/refresh/`, {
+      const res = await this.plainApi.post("/api/token/refresh/", {
         refresh: this.refreshToken,
       })
 
@@ -152,7 +160,24 @@ export class DjangoAPI {
     unique_payload: string
   }) {
     // Axios сам сделает JSON.stringify
-    const res = await this.api.post(`${this.api.defaults.baseURL}/api/payments/create/`, params)
+    const res = await this.api.post(`/api/payments/create/`, params)
     return res.data
   }
+
+  async getPaymentStatus(paymentId: number) {
+    // Ищем по id платеж
+    const res = await this.api.get(`/api/payments/`, {
+      params: { id: paymentId },
+    })
+
+    // DRF при фильтрации обычно возвращает список [ { ... } ]
+    if (Array.isArray(res.data) && res.data.length > 0) {
+      return res.data[0] // Возвращаем объект первого найденного платежа
+    }
+    return null
+  }
 }
+
+const djangoApi = new DjangoAPI()
+
+export default djangoApi

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { DjangoAPI } from "@/lib/django"
+import djangoApi from "@/lib/django"
 
-export async function POST(req: Request) {
+export async function GET(req: Request) {
   try {
     const { telegram_id } = await req.json()
 
@@ -9,8 +9,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "telegram_id is required" }, { status: 400 })
     }
 
-    const api = new DjangoAPI()
-    const users = await api.getUsersByTelegramId(telegram_id)
+    const users = await djangoApi.getUsersByTelegramId(telegram_id)
 
     // Если пользователь найден → вернуть его
     if (Array.isArray(users) && users.length > 0) {

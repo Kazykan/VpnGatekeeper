@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
-import { DjangoAPI } from "@/lib/django"
+import djangoApi from "@/lib/django"
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
     console.log("1. Отправляем в Django:", body)
 
-    const api = new DjangoAPI()
-    const paymentData = await api.createPayment(body)
+    const paymentData = await djangoApi.createPayment(body)
 
     console.log("2. Django ответил:", paymentData) // Должно быть { payment_id, confirmation_token }
 

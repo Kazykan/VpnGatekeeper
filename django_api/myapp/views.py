@@ -3,11 +3,11 @@ import logging
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.generics import ListCreateAPIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 
 from myapp.tasks.check_payment import check_payment_status
-from myapp.domain.subscription.services import extend_subscription_task
 from myapp.domain.amnezia.services import collect_amnezia_stats
 from .models import TelegramUser, Payment, Credential, Server
 from myapp.domain.infrastructure.yookassa_gateway import create_yookassa_payment
@@ -40,12 +40,48 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
 class CreatePaymentView(APIView):
     permission_classes = [IsAuthenticated]
-    queryset = Payment.objects.all()
-    serializer_class = PaymentSerializer
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["provider_payment_id", "unique_payload"]
 
-    def post(self, request, *args, **kwargs):
+    def get(self, request):
+        """
+        Фильтрация платежей.
+        Пример: /api/payments/?id=123
+        """
+        payment_id = request.query_params.get("id")
+
+        if payment_id:
+            payment = Payment.objects.filter(id=payment_id).first()
+            if not payment:
+                return Response({"error": "payment not found"}, status=404)
+
+            return Response(
+                {
+                    "id": payment.id,
+                    "amount": payment.amount,
+                    "status": payment.status,
+                    "months": payment.months,
+                    "provider_payment_id": payment.provider_payment_id,
+                    "payment_time": payment.payment_time,
+                    "unique_payload": payment.unique_payload,
+                }
+            )
+
+        # Если id не передан — можно вернуть список или ошибку
+        payments = Payment.objects.all().order_by("-id")
+        data = [
+            {
+                "id": p.id,
+                "amount": p.amount,
+                "status": p.status,
+                "months": p.months,
+                "provider_payment_id": p.provider_payment_id,
+                "payment_time": p.payment_time,
+                "unique_payload": p.unique_payload,
+            }
+            for p in payments
+        ]
+        return Response(data)
+
+    def post(self, request):
         telegram_id = request.data.get("telegram_id")
         amount = request.data.get("amount")
         pay_type = request.data.get("type")
@@ -54,12 +90,6 @@ class CreatePaymentView(APIView):
 
         if not all([telegram_id, amount, pay_type, unique_payload]):
             return Response({"error": "Missing fields"}, status=400)
-
-        # Валидация тарифа по ENV
-
-        # tariff = settings.TARIFFS_BY_PRICE.get(int(amount))
-        # if not tariff or tariff["type"] != pay_type or tariff["period"] != f"{months}m":
-        #     return Response({"error": "Invalid tariff"}, status=400)
 
         # Находим пользователя
         try:
@@ -87,14 +117,19 @@ class CreatePaymentView(APIView):
         payment.provider_payment_id = yk_payment.id
         payment.save()
 
-        # ЗАПУСК CELERY: Проверить через 10 минут, если вебхук не придет
-        # Передаем именно внутренний ID нашей записи в БД
-        check_payment_status.apply_async((payment.id,), countdown=600)
+        # Проверка через 10 минут, если вебхук не придёт
+        check_payment_status.apply_async((payment.id,), countdown=600)  # type: ignore
+
+        confirmation = yk_payment.confirmation
+        if confirmation and hasattr(confirmation, "confirmation_token"):
+            token = confirmation.confirmation_token
+        else:
+            token = None
 
         return Response(
             {
                 "payment_id": payment.id,
-                "confirmation_token": yk_payment.confirmation.confirmation_token,
+                "confirmation_token": token,
             },
             status=201,
         )

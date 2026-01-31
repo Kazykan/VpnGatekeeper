@@ -1,5 +1,6 @@
 # myapp/views_webhooks.py
 import json
+from myapp.tasks.billing import notify_admin_about_new_client
 from myapp.domain.subscription.services import extend_subscription_task
 from myapp.models import Payment
 from rest_framework.views import APIView
@@ -20,11 +21,13 @@ class YooKassaWebhookView(APIView):
 
         provider_id = obj.get("id")
         metadata = obj.get("metadata", {})
+        is_auto_charge = metadata.get("is_auto_charge", False)  # Получаем флаг
+
         payment_method = obj.get("payment_method", {})
         saved = payment_method.get("saved", False)
         pm_id = payment_method.get("id")
 
-        # Найти Payment: по provider_payment_id или по metadata.payment_id
+        # Поиск платежа
         payment = None
         if provider_id:
             payment = Payment.objects.filter(provider_payment_id=provider_id).first()
@@ -34,35 +37,52 @@ class YooKassaWebhookView(APIView):
         if not payment:
             return Response({"error": "payment not found"}, status=404)
 
+        # Обновляем статус платежа
         payment.status = "success"
         payment.raw_payload = json.dumps(request.data)
         payment.save()
 
-        if saved and pm_id:
-            user = payment.user
-            user.payment_method_id = pm_id
-            user.save()
+        user = payment.user
 
-        # Запустить задачу продления подписки (Celery)
-        if payment.months > 0:
-            extend_subscription_task.delay(
-                user_id=payment.user.id, months=payment.months
-            )
+        # Считаем количество успешных платежей пользователя
+        # Если это ПЕРВЫЙ успех — значит перед нами новый клиент
+        success_count = Payment.objects.filter(user=user, status="success").count()
+        if success_count == 1:
+            notify_admin_about_new_client(user.id, payment.id)
 
-        # Уведомить пользователя в Telegram
-
-        send_message(
-            payment.user.telegram_id, "✅ Оплата прошла. Подписка активирована."
-        )
-        if saved:
+        # ЛОГИКА АВТОПЛАТЕЖЕЙ
+        if is_auto_charge:
+            # Если это автосписание, просто уведомляем об успехе продления
             send_message(
-                payment.user.telegram_id,
-                "Карта сохранена — автосписания будут работать.",
+                user.telegram_id, "🔄 Подписка успешно продлена автоматически."
             )
         else:
-            send_message(
-                payment.user.telegram_id,
-                "Карта не сохранена. Для автосписаний нужно поставить галочку при оплате.",
-            )
+            # Если это РУЧНОЙ платеж
+            if user.autopay_enabled:
+                user.autopay_enabled = False
+                # user.payment_method_id = None # Оставляем ID, чтобы юзер мог включить обратно без ввода карты
+                user.save()
+                send_message(
+                    user.telegram_id, "ℹ️ Вы оплатили вручную. Автосписание отключено."
+                )
+
+            # Стандартные уведомления для ручной оплаты
+            send_message(user.telegram_id, "✅ Оплата прошла. Подписка активирована.")
+            if saved and pm_id:
+                user.payment_method_id = pm_id
+                user.autopay_enabled = True  # Если поставил галочку — включаем
+                user.save()
+                send_message(
+                    user.telegram_id, "💳 Карта сохранена — автопродление включено."
+                )
+            elif not saved:
+                send_message(
+                    user.telegram_id,
+                    "⚠️ Карта не сохранена. Для автосписаний нужно выбрать 'Сохранить карту'.",
+                )
+
+        # Запустить задачу продления в любом случае
+        if payment.months > 0:
+            extend_subscription_task.delay(user_id=user.id, months=payment.months)  # type: ignore
 
         return Response({"status": "ok"})

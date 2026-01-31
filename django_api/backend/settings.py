@@ -1,6 +1,7 @@
 from datetime import timedelta
 import os
 from pathlib import Path
+from celery.schedules import crontab
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -129,6 +130,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_API_KEY = os.getenv("YOOKASSA_API_KEY")
+ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
 
 CELERY_BROKER_URL = "redis://redis:6379/0"
 
@@ -157,3 +159,10 @@ SIMPLE_JWT = {
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
+
+CELERY_BEAT_SCHEDULE = {
+    "check-subscriptions-every-morning": {
+        "task": "myapp.tasks.billing.daily_billing_check",
+        "schedule": crontab(hour=9, minute=0),  # Каждый день в 9 утра
+    },
+}

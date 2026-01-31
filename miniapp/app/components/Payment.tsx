@@ -21,47 +21,66 @@ interface CreatePaymentResponse {
   confirmation_token: string
 }
 
-interface UserCheckResponse {
-  is_premium: boolean
-}
-
 export function Payment() {
+  const [isProcessing, setIsProcessing] = useState(false)
   const [activeSegmented, setActiveSegmented] = useState(2)
   const [isChecking, setIsChecking] = useState(false)
   const [showWidget, setShowWidget] = useState(false)
   const [token, setToken] = useState<string | null>(null)
+  const [currentPaymentId, setCurrentPaymentId] = useState<number | null>(null)
+
   const [errorDialog, setErrorDialog] = useState({
     opened: false,
     message: "",
   })
 
-  const { user, loading, error } = useUserStore()
+  const { user, loading, error, setUser } = useUserStore()
+
+  // Функция для тихого обновления данных пользователя без перезагрузки страницы
+  const refreshUserData = async () => {
+    if (!user?.telegram_id) return
+    try {
+      const updatedUser = await api.get<any>(`/api/user/check`, {
+        params: { telegram_id: user.telegram_id },
+      })
+      if (updatedUser) setUser(updatedUser)
+    } catch (e) {
+      console.error("Ошибка обновления данных пользователя:", e)
+    }
+  }
 
   // 1. Функция проверки статуса (Polling)
-  const verifyPayment = async () => {
+  const verifyPayment = async (paymentId: number) => {
     const interval = setInterval(async () => {
       try {
-        // Используем наш типизированный api
-        const userData = await api.get<UserCheckResponse>(`/api/user/check`, {
-          params: { telegram_id: user?.telegram_id },
+        const response = await api.get<{ status: string }>(`/api/payments/status`, {
+          params: { payment_id: paymentId },
         })
 
-        if (userData?.is_premium) {
+        console.log("Статус платежа:", response.status)
+
+        if (response.status === "success") {
           clearInterval(interval)
           setIsChecking(false)
-          alert("Оплата прошла успешно! Подписка активирована.")
+          await refreshUserData() // Обновляем данные в Zustand
+          setErrorDialog({ opened: true, message: "Оплата подтверждена! Подписка активирована." })
+        } else if (response.status === "failed") {
+          clearInterval(interval)
+          setIsChecking(false)
+          setErrorDialog({ opened: true, message: "Платеж отклонен банком." })
         }
       } catch (e) {
-        console.error("Ошибка проверки", e)
+        console.error("Ошибка опроса статуса:", e)
       }
     }, 3000)
 
-    setTimeout(() => clearInterval(interval), 120000)
+    // Лимит 10 минут
+    setTimeout(() => clearInterval(interval), 600000)
   }
 
   // 2. Функция создания платежа
   const handlePayment = async () => {
-    if (!user) return
+    if (!user || isProcessing) return
 
     const tariff = {
       1: { amount: 80, type: "once", months: 1 },
@@ -70,10 +89,11 @@ export function Payment() {
     }[activeSegmented as 1 | 2 | 3]
 
     if (!tariff) {
-      setErrorDialog({ opened: true, message: "Ошибка: тариф не найден" })
+      setErrorDialog({ opened: true, message: "Тариф не найден" })
       return
     }
 
+    setIsProcessing(true)
     try {
       const data = await api.post<CreatePaymentResponse>("/api/payments/create", {
         telegram_id: user.telegram_id,
@@ -83,37 +103,31 @@ export function Payment() {
         unique_payload: crypto.randomUUID(),
       })
 
-      console.log("Данные платежа получены:", data); // ДОБАВЬ ЭТО
-
+      setCurrentPaymentId(data.payment_id)
       setToken(data.confirmation_token)
       setShowWidget(true)
     } catch (e: any) {
-      const errorMsg = e.response?.data?.error || "Ошибка при создании платежа"
+      const errorMsg = e.response?.data?.error || "Ошибка создания платежа"
       setErrorDialog({ opened: true, message: errorMsg })
+    } finally {
+      setIsProcessing(false)
     }
-  } // <--- ВОТ ЭТА СКОБКА БЫЛА ПРОПУЩЕНА
-
-  // --- РЕНДЕР: СОСТОЯНИЯ ЗАГРУЗКИ ---
-
-  if (loading) {
-    return <div className="p-8 text-center text-gray-400">Загрузка данных пользователя...</div>
   }
 
-  if (error) {
-    return <div className="p-8 text-center text-red-500">Ошибка: {error}</div>
-  }
+  // --- РЕНДЕРЫ СОСТОЯНИЙ ---
 
-  if (!user) {
-    return <div className="p-8 text-center text-gray-400">Пользователь не найден</div>
-  }
+  if (loading) return <div className="p-8 text-center text-gray-400">Загрузка...</div>
+  if (error) return <div className="p-8 text-center text-red-500">Ошибка: {error}</div>
+  if (!user) return <div className="p-8 text-center text-gray-400">Пользователь не авторизован</div>
 
   if (isChecking) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center">
-        <Preloader className="mb-4" />
-        <h3 className="text-lg font-bold">Обработка оплаты</h3>
+        <Preloader className="mb-4 w-10 h-10" />
+        <h3 className="text-lg font-bold">Ожидаем подтверждение</h3>
         <p className="text-sm opacity-60">
-          Мы получили подтверждение и активируем вашу подписку. Пожалуйста, не закрывайте окно.
+          Ваш платеж обрабатывается. Как только банк подтвердит операцию, доступ откроется
+          автоматически.
         </p>
       </div>
     )
@@ -121,10 +135,10 @@ export function Payment() {
 
   if (showWidget && token) {
     return (
-      <div className="flex flex-col min-h-screen">
-        <div className="p-4 border-b">
+      <div className="flex flex-col min-h-screen bg-white">
+        <div className="p-2 border-b">
           <Button clear onClick={() => setShowWidget(false)}>
-            ← Назад к тарифам
+            ← Отмена
           </Button>
         </div>
         <div className="flex-1">
@@ -133,11 +147,11 @@ export function Payment() {
             onSuccess={() => {
               setShowWidget(false)
               setIsChecking(true)
-              verifyPayment()
+              if (currentPaymentId) verifyPayment(currentPaymentId)
             }}
             onError={(err) => {
               console.error(err)
-              setErrorDialog({ opened: true, message: "Ошибка оплаты" })
+              setErrorDialog({ opened: true, message: "Ошибка во время оплаты" })
               setShowWidget(false)
             }}
           />
@@ -147,93 +161,85 @@ export function Payment() {
   }
 
   return (
-    <>
-      <div className="w-full overflow-hidden">
-        <Block strong inset className="!my-2">
-          <Segmented strong>
-            <SegmentedButton active={activeSegmented === 1} onClick={() => setActiveSegmented(1)}>
-              1 мес
-            </SegmentedButton>
-            <SegmentedButton active={activeSegmented === 2} onClick={() => setActiveSegmented(2)}>
-              Авто
-            </SegmentedButton>
-            <SegmentedButton active={activeSegmented === 3} onClick={() => setActiveSegmented(3)}>
-              3 мес
-            </SegmentedButton>
-          </Segmented>
-        </Block>
-
-        <BlockTitle className="!mt-4 !mb-2 uppercase text-[11px] opacity-60">
-          Выбранный тариф
-        </BlockTitle>
-
-        <Card className="!m-0">
-          <div className="flex flex-col items-center py-6 text-center min-h-[140px] justify-center">
-            {activeSegmented === 1 && (
-              <>
-                <div className="text-4xl font-bold mb-1">80₽</div>
-                <div className="text-gray-400 text-sm italic">разовая оплата</div>
-              </>
-            )}
-
-            {activeSegmented === 2 && (
-              <>
-                <div className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase font-bold mb-2 tracking-wide">
-                  Выгодно
-                </div>
-                <div className="text-6xl font-black text-primary leading-none mb-2">70₽</div>
-                <div className="text-sm font-bold text-primary uppercase tracking-tight">
-                  Автосписание
-                </div>
-                <div className="text-[11px] opacity-50 mt-1 italic">70₽ каждый месяц</div>
-              </>
-            )}
-
-            {activeSegmented === 3 && (
-              <>
-                <div className="text-4xl font-bold mb-1">210₽</div>
-                <div className="text-gray-400 text-sm">за 3 месяца</div>
-                <div className="text-[11px] opacity-50 mt-1 uppercase font-semibold">
-                  Экономия 30₽
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="mt-4">
-            <Button
-              large
-              rounded
-              onClick={handlePayment}
-              className={
-                activeSegmented === 2
-                  ? "shadow-lg scale-[1.02] active:scale-95 transition-transform"
-                  : ""
-              }
+    <div className="w-full pb-10">
+      <Block strong inset className="!my-2">
+        <Segmented strong>
+          {[1, 2, 3].map((val) => (
+            <SegmentedButton
+              key={val}
+              active={activeSegmented === val}
+              onClick={() => setActiveSegmented(val)}
             >
-              {activeSegmented === 2 ? "Подписаться за 70₽" : "Оплатить"}
-            </Button>
-          </div>
-        </Card>
+              {val === 1 ? "1 мес" : val === 2 ? "Авто" : "3 мес"}
+            </SegmentedButton>
+          ))}
+        </Segmented>
+      </Block>
 
-        <div className="px-4 mt-3 mb-2 text-center">
-          <p className="text-[10px] text-gray-500 leading-tight opacity-40 uppercase">
-            Отмена подписки доступна в любой момент в боте
-          </p>
+      <BlockTitle className="!mt-4 !mb-2 uppercase text-[11px] opacity-60">
+        Вариант подписки
+      </BlockTitle>
+
+      <Card className="!m-0">
+        <div className="flex flex-col items-center py-8 text-center justify-center min-h-[160px]">
+          {activeSegmented === 1 && (
+            <>
+              <div className="text-5xl font-bold mb-1">80₽</div>
+              <div className="text-gray-400 text-sm">разовый платеж</div>
+            </>
+          )}
+
+          {activeSegmented === 2 && (
+            <>
+              <div className="bg-green-600 text-white text-[10px] px-3 py-0.5 rounded-full uppercase font-black mb-3">
+                ХИТ
+              </div>
+              <div className="text-7xl font-black text-primary leading-none mb-1">70₽</div>
+              <div className="text-sm font-bold uppercase">Ежемесячно</div>
+            </>
+          )}
+
+          {activeSegmented === 3 && (
+            <>
+              <div className="text-5xl font-bold mb-1">210₽</div>
+              <div className="text-gray-400 text-sm italic">выгода 30₽</div>
+            </>
+          )}
         </div>
-      </div>
+
+        <div className="px-4 pb-4">
+          <Button
+            large
+            rounded
+            disabled={isProcessing}
+            onClick={handlePayment}
+            className={activeSegmented === 2 ? "shadow-md" : ""}
+          >
+            {isProcessing ? (
+              <div className="flex items-center space-x-2">
+                <Preloader className="w-5 h-5" />
+                <span>Загрузка...</span>
+              </div>
+            ) : activeSegmented === 2 ? (
+              "Подписаться"
+            ) : (
+              "Купить"
+            )}
+          </Button>
+        </div>
+      </Card>
 
       <Dialog
         opened={errorDialog.opened}
         onBackdropClick={() => setErrorDialog({ opened: false, message: "" })}
-        title="Ошибка"
+        title="Упс!"
         content={errorDialog.message}
         buttons={
-          <DialogButton strong onClick={() => setErrorDialog({ opened: false, message: "" })}>
-            OK
+          <DialogButton onClick={() => setErrorDialog({ opened: false, message: "" })}>
+            Закрыть
           </DialogButton>
         }
       />
-    </>
+    </div>
   )
 }

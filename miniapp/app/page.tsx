@@ -43,6 +43,18 @@ export default function Home() {
       </Page>
     )
 
+  // Рассчитываем остаток дней
+  const now = new Date()
+  const endDate = user.end_date ? new Date(user.end_date) : null
+  const daysLeft = endDate
+    ? Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    : 0
+
+  const isSubscriptionActive = daysLeft > 0
+
+  // Дата автосписания (за 2 дня до окончания)
+  const autopayDate = endDate ? new Date(endDate.getTime() - 2 * 24 * 60 * 60 * 1000) : null
+
   return (
     <Page>
       <Header user={user} session={session} />
@@ -52,15 +64,69 @@ export default function Home() {
         {" "}
         {/* Отступ для таббара */}
         {activeTab === "vpn" && (
-          <div className="animate-fadeIn">
+          <div className="animate-fadeIn space-y-4">
             <UserInfo user={user} />
-            <Payment />
+
+            {isSubscriptionActive ? (
+              <Block strong inset className="!my-2 border-l-4 border-primary bg-primary/5">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">
+                      Подписка активна
+                    </p>
+                    <p className="text-xl font-bold">Осталось: {daysLeft} дн.</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-gray-500 uppercase">
+                      До {endDate?.toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+
+                {user.autopay_enabled && autopayDate && (
+                  <div className="mt-4 p-2 bg-black/20 rounded-lg flex items-center gap-2">
+                    <span className="text-lg">💳</span>
+                    <div className="text-[11px] leading-tight text-gray-300">
+                      Автопродление включено. Списание произойдет <br />
+                      <span className="text-primary font-semibold">
+                        {autopayDate.toLocaleDateString()}
+                      </span>{" "}
+                      (за 2 дня до конца)
+                    </div>
+                  </div>
+                )}
+
+                {/* Если дней осталось мало, а автооплаты нет — можно все же показать кнопку продления */}
+                {!user.autopay_enabled && daysLeft <= 5 && (
+                  <div className="mt-4">
+                    <p className="text-[11px] text-orange-400 mb-2">
+                      Советуем продлить заранее, чтобы не потерять доступ
+                    </p>
+                    <Payment small /> {/* Можно сделать Payment компактным через пропсы */}
+                  </div>
+                )}
+              </Block>
+            ) : (
+              <Payment />
+            )}
+
+            {/* Блок с трафиком (статистика) */}
+            <Block strong inset className="!my-2">
+              <div className="flex justify-between items-end mb-1">
+                <span className="text-xs text-gray-400">Использовано за месяц</span>
+                <span className="text-sm font-mono">12.4 GB / ∞</span>
+              </div>
+              <div className="w-full bg-gray-800 h-1 rounded-full">
+                <div className="bg-primary h-full w-[12%]" />
+              </div>
+            </Block>
+
             <Block
               strong
               inset
               className="text-center text-[10px] text-gray-500 uppercase tracking-widest opacity-60"
             >
-              Безопасное соединение через протоколы VLESS/AmneziaWG
+              Протоколы: VLESS + AmneziaWG
             </Block>
           </div>
         )}
