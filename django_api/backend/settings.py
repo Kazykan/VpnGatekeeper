@@ -166,3 +166,46 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=9, minute=0),  # Каждый день в 9 утра
     },
 }
+
+
+# Путь к папке с логами
+# LOGS_DIR = BASE_DIR / "logs"
+# LOGS_DIR.mkdir(exist_ok=True)
+
+# LOGGING = {
+#     "version": 1,
+#     "disable_existing_loggers": False,
+#     "formatters": {
+#         "standard": {
+#             "format": "[{asctime}] {levelname} {name}: {message}",
+#             "style": "{",
+#         },
+#     },
+#     "handlers": {
+#         # 1. Запись всех ошибок в файл с ротацией
+#         "file_errors": {
+#             "level": "ERROR",
+#             "class": "logging.handlers.TimedRotatingFileHandler",
+#             "filename": LOGS_DIR / "error.log",
+#             "when": "D",  # Ротация каждый день (Day)
+#             "interval": 1,  # Интервал - 1 день
+#             "backupCount": 180,  # Хранить 180 файлов (примерно 6 месяцев)
+#             "formatter": "standard",
+#             "encoding": "utf-8",
+#         },
+#         # 2. Отправка только CRITICAL в Telegram
+#         "telegram_critical": {
+#             "level": "CRITICAL",  # Только критические ошибки
+#             "class": "myapp.core.log_handlers.TelegramHandler",  # Путь к вашему классу
+#             "formatter": "standard",
+#         },
+#     },
+#     "loggers": {
+#         # Основной логгер Django
+#         "django": {
+#             "handlers": ["file_errors", "telegram_critical"],
+#             "level": "ERROR",
+#             "propagate": True,
+#         },
+#     },
+# }

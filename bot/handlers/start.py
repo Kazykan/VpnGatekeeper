@@ -1,12 +1,13 @@
 import uuid
 from aiogram import Router, types
 from aiogram.filters import Command, CommandObject
-from bot.utils.tariffs import TARIFFS, period_to_months
+from utils.tariffs import TARIFFS, period_to_months
 from keyboards.menu_kb import miniapp_keyboard
 from utils.api import DjangoAPI
 
 router = Router()
 django_api = DjangoAPI()
+
 
 def register_start_handlers(dp):
     dp.include_router(router)
@@ -41,7 +42,9 @@ async def cmd_start(message: types.Message, command: CommandObject):
 
                 # Если по какой-то причине юзера нет в БД, регистрируем без реферала
                 if not is_registered:
-                    await django_api.register_user(tg_id=tg_id, name=name, invited_by=None)
+                    await django_api.register_user(
+                        tg_id=tg_id, name=name, invited_by=None
+                    )
 
                 await message.answer(
                     f"💳 Вы выбрали тариф: {amount}₽ ({'подписка' if pay_type == 'sub' else 'разово'})"
@@ -54,13 +57,16 @@ async def cmd_start(message: types.Message, command: CommandObject):
                     return
                 months = period_to_months(tariff["period"])
                 unique_payload = f"{uuid.uuid4()}-{tg_id}-{months}-{amount}"
-                resp = await django_api.create_payment( 
-                    tg_id=tg_id, 
+                resp = await django_api.create_payment(
+                    tg_id=tg_id,
                     amount=amount,
                     pay_type=tariff["type"],
                     months=months,
-                    unique_payload=unique_payload, ) 
-                confirmation_url = resp.get("confirmation_url") # отправляешь кнопку с confirmation_url
+                    unique_payload=unique_payload,
+                )
+                confirmation_url = resp.get(
+                    "confirmation_url"
+                )  # отправляешь кнопку с confirmation_url
                 return
             except (IndexError, ValueError):
                 await message.answer("Ошибка в параметрах оплаты.")
@@ -82,7 +88,9 @@ async def cmd_start(message: types.Message, command: CommandObject):
 
         if not is_registered:
             # Теперь referrer_id имеет тип int | None, ошибка исчезнет
-            await register_user(tg_id=tg_id, name=name, invited_by=referrer_id)
+            await django_api.register_user(
+                tg_id=tg_id, name=name, invited_by=referrer_id
+            )
             await message.answer("🎉 Вы успешно зарегистрированы по приглашению!")
         else:
             # Если уже в базе, просто игнорируем реферал, но даем пройти дальше
@@ -90,7 +98,7 @@ async def cmd_start(message: types.Message, command: CommandObject):
 
     # 3. Базовая регистрация (если зашел без параметров и его нет в базе)
     if not is_registered:
-        await register_user(tg_id=tg_id, name=name, invited_by=None)
+        await django_api.register_user(tg_id=tg_id, name=name, invited_by=None)
 
     # 4. Финальный ответ с кнопкой запуска Mini App
     await message.answer(

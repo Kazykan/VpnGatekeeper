@@ -32,7 +32,6 @@ services:
       - POSTGRES_PASSWORD=pass
       - DB_HOST=db
       - DB_PORT=5432
-      # Не забудьте про Celery, раз мы его обсуждали
       - CELERY_BROKER_URL=redis://redis:6379/0
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_TOKEN}
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}

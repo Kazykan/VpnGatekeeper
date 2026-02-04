@@ -152,7 +152,7 @@ class ServerViewSet(viewsets.ModelViewSet):
 
 
 class AllAmneziaStatsView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         results = collect_amnezia_stats()
