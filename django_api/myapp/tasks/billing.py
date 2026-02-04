@@ -4,7 +4,10 @@ from datetime import date, timedelta
 from backend import settings
 from myapp.models import Payment, TelegramUser
 from myapp.domain.subscription.services import process_autopayment_for_user
-from myapp.domain.infrastructure.telegram_gateway import send_message
+from myapp.domain.infrastructure.telegram_gateway import (
+    send_message,
+    send_message_to_admin_chanel,
+)
 from django.db.models import Count, Sum
 from django.utils import timezone
 
@@ -73,7 +76,7 @@ def send_daily_admin_stats():
     msg += f"\n💰 **Итого выручка:** {grand_total} руб."
 
     # Отправляем админу
-    send_message(settings.ADMIN_TELEGRAM_ID, msg)
+    send_message_to_admin_chanel(msg)
 
 
 def notify_admin_about_new_client(user_pk, payment_pk):
@@ -110,4 +113,4 @@ def notify_admin_about_new_client(user_pk, payment_pk):
     )
 
     # Отправляем админу
-    send_message(settings.ADMIN_TELEGRAM_ID, message)
+    send_message_to_admin_chanel(message)

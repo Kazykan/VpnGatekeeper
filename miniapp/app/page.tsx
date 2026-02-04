@@ -18,6 +18,7 @@ import { RequireBotRegistration } from "./components/RequireBotRegistration"
 import { Payment } from "./components/Payment"
 import { Header } from "./components/Header"
 import { UserInfo } from "./components/UserInfo"
+import { Connect } from "./components/Connect"
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("vpn")
@@ -156,6 +157,7 @@ export default function Home() {
         )}
         {activeTab === "settings" && (
           <div className="animate-fadeIn">
+            <Connect />
             <BlockTitle>Настройки приложения</BlockTitle>
             <List strong inset>
               <ListItem title="Уведомления" after={<Toggle defaultChecked small color="green" />} />

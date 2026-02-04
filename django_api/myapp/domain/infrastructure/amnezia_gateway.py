@@ -99,9 +99,9 @@ class AmneziaGateway:
     def unblock_ip(self, ip: str):
         """Разблокировать IP на уровне Linux firewall"""
         payload = {"ip": ip}
-        return self._request("POST", "/api/block_ip/unblock_ip", data=payload)
+        return self._request("POST", "/api/wg/unblock_ip", data=payload)
 
     def block_ip(self, ip: str):
         """Заблокировать IP на уровне Linux firewall"""
         payload = {"ip": ip}
-        return self._request("POST", "/api/block_ip/block_ip", data=payload)
+        return self._request("POST", "/api/wg/block_ip", data=payload)

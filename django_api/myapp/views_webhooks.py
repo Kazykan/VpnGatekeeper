@@ -6,7 +6,10 @@ from myapp.domain.subscription.services import extend_subscription_task
 from myapp.models import Payment
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from myapp.domain.infrastructure.telegram_gateway import send_message
+from myapp.domain.infrastructure.telegram_gateway import (
+    send_message,
+    send_message_to_admin_chanel,
+)
 
 
 class YooKassaWebhookView(APIView):
@@ -85,6 +88,6 @@ class YooKassaWebhookView(APIView):
         # Запустить задачу продления в любом случае
         if payment.months > 0:
             extend_subscription_task.delay(user_id=user.id, months=payment.months)  # type: ignore
-            sync_vpn_cluster.delay(telegram_id=user.telegram_id) # type: ignore
+            sync_vpn_cluster.delay(telegram_id=user.telegram_id)  # type: ignore
 
         return Response({"status": "ok"})

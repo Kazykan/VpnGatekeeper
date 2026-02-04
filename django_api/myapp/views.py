@@ -3,9 +3,9 @@ import logging
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.generics import ListCreateAPIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
 
 from myapp.tasks.check_payment import check_payment_status
 from myapp.domain.amnezia.services import collect_amnezia_stats

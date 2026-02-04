@@ -138,7 +138,6 @@ class DjangoAPI {
   // --- Публичные методы API ---
 
   async getUsersByTelegramId(telegramId: number) {
-    // Больше не нужно писать res.json() или ловить статусы вручную
     const res = await this.api.get(`/api/users/`, {
       params: { telegram_id: telegramId },
     })
@@ -159,7 +158,6 @@ class DjangoAPI {
     months: number
     unique_payload: string
   }) {
-    // Axios сам сделает JSON.stringify
     const res = await this.api.post(`/api/payments/create/`, params)
     return res.data
   }
@@ -170,9 +168,8 @@ class DjangoAPI {
       params: { id: paymentId },
     })
 
-    // DRF при фильтрации обычно возвращает список [ { ... } ]
     if (Array.isArray(res.data) && res.data.length > 0) {
-      return res.data[0] // Возвращаем объект первого найденного платежа
+      return res.data[0]
     }
     return null
   }

@@ -1,3 +1,4 @@
+import { api } from "@/lib/api"
 import { create } from "zustand"
 
 export interface User {
@@ -16,6 +17,7 @@ interface UserStore {
   error: string | null
   initData: string
 
+  fetchUser: (telegram_id?: number) => Promise<void>
   setUser: (u: User | null) => void
   setError: (msg: string) => void
   setLoading: (v: boolean) => void
@@ -27,6 +29,20 @@ export const useUserStore = create<UserStore>((set) => ({
   loading: true,
   error: null,
   initData: "",
+
+  fetchUser: async (telegram_id?: number) => {
+    try {
+      set({ loading: true })
+      const data = await api.get<User>("/api/user/check", {
+        params: { telegram_id },
+      })
+      set({ user: data, error: null })
+    } catch (e: any) {
+      set({ error: e.response?.data?.error || "Ошибка загрузки" })
+    } finally {
+      set({ loading: false })
+    }
+  },
 
   setUser: (u) => set({ user: u, loading: false }),
   setError: (msg) => set({ error: msg, loading: false }),

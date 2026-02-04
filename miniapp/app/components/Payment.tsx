@@ -37,17 +37,7 @@ export function Payment() {
   const { user, loading, error, setUser } = useUserStore()
 
   // Функция для тихого обновления данных пользователя без перезагрузки страницы
-  const refreshUserData = async () => {
-    if (!user?.telegram_id) return
-    try {
-      const updatedUser = await api.get<any>(`/api/user/check`, {
-        params: { telegram_id: user.telegram_id },
-      })
-      if (updatedUser) setUser(updatedUser)
-    } catch (e) {
-      console.error("Ошибка обновления данных пользователя:", e)
-    }
-  }
+  const fetchUser = useUserStore((s) => s.fetchUser)
 
   // 1. Функция проверки статуса (Polling)
   const verifyPayment = async (paymentId: number) => {
@@ -62,7 +52,8 @@ export function Payment() {
         if (response.status === "success") {
           clearInterval(interval)
           setIsChecking(false)
-          await refreshUserData() // Обновляем данные в Zustand
+          if (!user) return
+          await fetchUser(user.telegram_id)
           setErrorDialog({ opened: true, message: "Оплата подтверждена! Подписка активирована." })
         } else if (response.status === "failed") {
           clearInterval(interval)
