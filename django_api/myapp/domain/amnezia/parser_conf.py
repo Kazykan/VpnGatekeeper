@@ -1,54 +1,81 @@
 import base64
 import json
 import re
-from django.http import JsonResponse
-from django.conf import settings
+import zlib
 
 
-def parse_wg_conf(conf_text):
-    """Парсит текст конфига в словарь для JSON"""
-    data = {}
-    # Извлекаем значения через регулярки
-    patterns = {
-        "Address": r"Address\s*=\s*(.*)",
-        "PrivateKey": r"PrivateKey\s*=\s*(.*)",
-        "PublicKey": r"PublicKey\s*=\s*(.*)",
-        "PresharedKey": r"PresharedKey\s*=\s*(.*)",
-        "Endpoint": r"Endpoint\s*=\s*(.*)",
-        "Jc": r"Jc\s*=\s*(\d+)",
-        "Jmin": r"Jmin\s*=\s*(\d+)",
-        "Jmax": r"Jmax\s*=\s*(\d+)",
-        "S1": r"S1\s*=\s*(\d+)",
-        "S2": r"S2\s*=\s*(\d+)",
-        "H1": r"H1\s*=\s*(.*)",
-    }
-    for key, pattern in patterns.items():
-        match = re.search(pattern, conf_text)
-        if match:
-            data[key] = match.group(1).strip()
-    return data
+def encode_amnezia_standard(data_dict):
+    """
+    Кодирование по стандарту Amnezia (zlib + header + base64).
+    Используется для того, чтобы ссылки гарантированно открывались.
+    """
+    json_str = json.dumps(data_dict, indent=4).encode()
+    compressed = zlib.compress(json_str)
+
+    # 4-байтовый заголовок с длиной данных
+    header = len(json_str).to_bytes(4, byteorder="big")
+
+    # URL-safe кодирование без лишних знаков '=' в конце
+    encoded = base64.urlsafe_b64encode(header + compressed).decode().rstrip("=")
+    return encoded
 
 
-def get_vpn_configs(request, user_id):
-    # 1. Заглушка Load Balancer (выбираем случайный эндпоинт)
-    # В будущем тут: Server.objects.order_by('current_users').first()
-    main_endpoint = "wg1.kocherbaev.ru:33042"
-    white_endpoint = "gw_white1.kocherbaev.ru:33042"  # РФ Шлюз
+def get_amnezia_settings(conf_text, new_endpoint=None):
+    """Парсит текст конфига AmneziaWG в словарь."""
+    if not conf_text:
+        return {}
 
-    # 2. Получаем Credential из БД
-    # credential = Credential.objects.get(user__id=user_id)
-    # wg_data = parse_wg_conf(credential.wg_conf)
+    amnezia_settings = {}
+    pattern = re.compile(r"^\s*([\w\d]+)\s*=\s*(.*)$", re.MULTILINE)
+    matches = pattern.findall(conf_text)
 
-    # Для примера имитируем данные AmneziaWG
-    wg_data = {
-        "Address": "10.8.1.10/32",
-        "PrivateKey": "base64...",
-        "PublicKey": "base64...",
-        "Jc": 4,
-    }
+    # Поля, которые Amnezia ожидает видеть как числа
+    numeric_fields = [
+        "Jc",
+        "Jmin",
+        "Jmax",
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "port",
+        "PersistentKeepalive",
+    ]
 
-    # 3. Формируем структуру для Amnezia (Android/PC)
-    # Она поддерживает список контейнеров
+    for key, value in matches:
+        key = key.strip()
+        value = value.strip()
+
+        if key == "Endpoint" and new_endpoint:
+            amnezia_settings[key] = new_endpoint
+        elif key in numeric_fields:
+            try:
+                amnezia_settings[key] = int(value)
+            except ValueError:
+                amnezia_settings[key] = value
+        else:
+            amnezia_settings[key] = value
+
+    return amnezia_settings
+
+
+def generate_vpn_config_links(credential):
+    """Генерация ссылок для ответа API."""
+    if not credential.wg_conf:
+        return None
+
+    # Настройки эндпоинтов (можно заменить на данные из credential.server.address)
+    main_endpoint = "wg3.kocherbaev.ru:33042"
+    white_endpoint = "gw_white1.kocherbaev.ru:33042"
+
+    wg_settings_main = get_amnezia_settings(
+        credential.wg_conf, new_endpoint=main_endpoint
+    )
+    wg_settings_white = get_amnezia_settings(
+        credential.wg_conf, new_endpoint=white_endpoint
+    )
+
+    # 1. Структура для всей пачки (amnezia://)
     amnezia_json = {
         "containers": [
             {
@@ -56,29 +83,36 @@ def get_vpn_configs(request, user_id):
                 "container": "amnezia-wg",
                 "hostname": main_endpoint.split(":")[0],
                 "port": int(main_endpoint.split(":")[1]),
-                "settings": wg_data,
+                "settings": wg_settings_main,
             },
             {
                 "name": "Белые списки (РФ)",
                 "container": "amnezia-wg",
                 "hostname": white_endpoint.split(":")[0],
                 "port": int(white_endpoint.split(":")[1]),
-                "settings": wg_data,  # Те же ключи, другой хост
+                "settings": wg_settings_white,
+            },
+            {
+                "name": "Xray VLESS",
+                "container": "xray",
+                "hostname": main_endpoint.split(":")[0],
+                "port": 443,
+                "settings": {"vless_url": credential.vless_url or ""},
             },
         ]
     }
 
-    # 4. Кодируем в Base64
-    amnezia_b64 = base64.b64encode(json.dumps(amnezia_json).encode()).decode()
-
-    # Ссылка для iOS (DefaultVPN обычно ждет один конфиг в JSON)
+    # 2. Структура для одиночного конфига (vpn://) — берем Main
     ios_json = amnezia_json["containers"][0]
-    ios_b64 = base64.b64encode(json.dumps(ios_json).encode()).decode()
 
-    return JsonResponse(
-        {
-            "amnezia_url": f"amnezia://{amnezia_b64}",
-            "default_vpn_url": f"vpn://{ios_b64}",
-            "raw_conf": "...",  # на случай ручной настройки
-        }
-    )
+    # Кодируем обе ссылки через "умный" упаковщик со сжатием
+    # (Amnezia отлично понимает сжатый формат и в ссылках amnezia://)
+    amnezia_payload = encode_amnezia_standard(amnezia_json)
+    ios_payload = encode_amnezia_standard(ios_json)
+
+    return {
+        "amnezia_url": f"amnezia://{amnezia_payload}",
+        "default_vpn_url": f"vpn://{ios_payload}",
+        "vless_raw": credential.vless_url,
+        "raw_wg_conf": credential.wg_conf,
+    }

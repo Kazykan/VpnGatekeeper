@@ -2,6 +2,8 @@
 
 import React, { useState } from "react"
 import { useUserStore } from "@/store/useUserStore"
+import { useVpnConfig } from "./hooks/useVpnConfig"
+import { VpnConfigSheet } from "./components/VpnConfigSheet"
 import {
   Page,
   Block,
@@ -12,6 +14,7 @@ import {
   ListItem,
   Toggle,
   BlockTitle,
+  Button,
 } from "konsta/react"
 import { useSessionStore } from "@/store/useSessionStore"
 import { RequireBotRegistration } from "./components/RequireBotRegistration"
@@ -24,6 +27,21 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("vpn")
   const { user, loading, error } = useUserStore()
   const session = useSessionStore((s) => s.session)
+  const {
+    credential,
+    config,
+    loading: vpnLoading,
+    error: vpnError,
+    loadCredentials,
+    loadConfig,
+  } = useVpnConfig()
+  const [sheetOpen, setSheetOpen] = useState(false)
+
+  async function handleOpenConfig() {
+    await loadCredentials()
+    const data = await loadConfig()
+    if (data) setSheetOpen(true)
+  }
 
   if (loading) {
     return (
@@ -96,6 +114,17 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+
+                {/* Получить конфиг */}
+                <Button large onClick={handleOpenConfig}>
+                  Получить VPN конфиг
+                </Button>
+
+                <VpnConfigSheet
+                  opened={sheetOpen}
+                  onClose={() => setSheetOpen(false)}
+                  config={config}
+                />
 
                 {/* Если дней осталось мало, а автооплаты нет — можно все же показать кнопку продления */}
                 {!user.autopay_enabled && daysLeft <= 5 && (

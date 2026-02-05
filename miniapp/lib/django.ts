@@ -173,6 +173,17 @@ class DjangoAPI {
     }
     return null
   }
+
+  async getCredentialConfigUrls(credentialId: number) {
+    const res = await this.api.get(`/api/credentials/${credentialId}/config-urls/`)
+    return res.data
+  }
+
+  // Получаем список подключений
+  async getCredentialsByUser(userId: number) {
+    const res = await this.api.get(`/api/credentials/`, { params: { user: userId } })
+    return res.data
+  }
 }
 
 const djangoApi = new DjangoAPI()

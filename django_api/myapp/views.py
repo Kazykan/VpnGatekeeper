@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
-
+from myapp.domain.amnezia.parser_conf import generate_vpn_config_links
 from myapp.tasks.check_payment import check_payment_status
 from myapp.domain.amnezia.services import collect_amnezia_stats
 from .models import TelegramUser, Payment, Credential, Server
@@ -142,6 +142,19 @@ class CredentialViewSet(viewsets.ModelViewSet):
     serializer_class = CredentialSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["user"]
+
+    @action(detail=True, methods=["get"], url_path="config-urls")
+    def get_config_urls(self, request, pk=None):
+        """
+        GET /api/credentials/<id>/config-urls/
+        """
+        credential = self.get_object()
+        links = generate_vpn_config_links(credential)
+
+        if not links:
+            return Response({"error": "Config is not ready"}, status=400)
+
+        return Response(links)
 
 
 class ServerViewSet(viewsets.ModelViewSet):
