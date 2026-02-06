@@ -3,14 +3,15 @@ version: "3.9"
 services:
   db:
     image: postgres:15
+    container_name: postgres_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=django_db
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=${POSTGRES_DB:-django_db}
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pass}
     ports:
-      - "5432:5432" # Опционально
+      - "${DB_PORT:-5432}:5432"
 
   redis:
     image: redis:7-alpine
@@ -19,17 +20,19 @@ services:
   django:
     build: ./django_api
     container_name: django_api
+    # Если в .env нет DJANGO_COMMAND, запустится runserver (для Dev)
+    command: ${DJANGO_COMMAND:-python manage.py runserver 0.0.0.0:8000}
     volumes:
       - ./django_api:/app
     ports:
-      - "8000:8000"
+      - "${DJANGO_PORT:-8000}:8000"
     depends_on:
       - db
       - redis
     environment:
-      - POSTGRES_DB=django_db
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=${POSTGRES_DB:-django_db}
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pass}
       - DB_HOST=db
       - DB_PORT=5432
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -41,7 +44,6 @@ services:
       - YOOKASSA_API_KEY=${YOOKASSA_API_KEY}
       - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
 
-  # Новый сервис: Воркер, который будет создавать конфиги на серверах
   celery_worker:
     build: ./django_api
     container_name: celery_worker
@@ -52,9 +54,9 @@ services:
       - django
       - redis
     environment:
-      - POSTGRES_DB=django_db
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=${POSTGRES_DB:-django_db}
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pass}
       - DB_HOST=db
       - DB_PORT=5432
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -69,7 +71,8 @@ services:
   bot:
     build: ./bot
     container_name: aiogram_bot
-    command: watchfiles --filter python "python main.py"
+    # На Dev использует watchfiles, на Prod — команду из .env
+    command: ${BOT_COMMAND:-watchfiles --filter python "python main.py"}
     volumes:
       - ./bot:/app
     depends_on:
@@ -84,12 +87,13 @@ services:
   miniapp:
     build: ./miniapp
     container_name: nextjs_app
-    command: npm run dev
+    # На Dev запустит npm run dev, на Prod — билд и старт
+    command: ${MINIAPP_COMMAND:-npm run dev}
     volumes:
       - ./miniapp:/app
       - /app/node_modules
     ports:
-      - "3000:3000"
+      - "${MINIAPP_PORT:-3000}:3000"
     depends_on:
       - redis
       - django
@@ -99,5 +103,6 @@ services:
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
       - TARIFFS=${TARIFFS}
+
 volumes:
   postgres_data:
