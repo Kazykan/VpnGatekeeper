@@ -24,6 +24,8 @@ services:
     command: ${DJANGO_COMMAND:-python manage.py runserver 0.0.0.0:8000}
     volumes:
       - ./django_api:/app
+      - django_static:/app/static # Добавляем это
+      - django_media:/app/media # И это (для картинок)
     ports:
       - "${DJANGO_PORT:-8000}:8000"
     depends_on:
@@ -106,3 +108,5 @@ services:
 
 volumes:
   postgres_data:
+  django_static:
+  django_media:
