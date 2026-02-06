@@ -174,14 +174,11 @@ class DjangoAPI {
     return null
   }
 
-  async getCredentialConfigUrls(credentialId: number) {
-    const res = await this.api.get(`/api/credentials/${credentialId}/config-urls/`)
-    return res.data
-  }
-
-  // Получаем список подключений
-  async getCredentialsByUser(userId: number) {
-    const res = await this.api.get(`/api/credentials/`, { params: { user: userId } })
+  async getCredentialConfigByTg(telegram_id: string) {
+    // Получение всех подключений
+    const res = await this.api.get(`/api/credentials/config-by-tg/`, {
+      params: { telegram_id: telegram_id },
+    })
     return res.data
   }
 }

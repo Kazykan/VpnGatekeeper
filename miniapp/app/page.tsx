@@ -2,8 +2,7 @@
 
 import React, { useState } from "react"
 import { useUserStore } from "@/store/useUserStore"
-import { useVpnConfig } from "./hooks/useVpnConfig"
-import { VpnConfigSheet } from "./components/VpnConfigSheet"
+import { VpnConfigInline } from "./components/VpnConfigInline"
 import {
   Page,
   Block,
@@ -27,21 +26,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("vpn")
   const { user, loading, error } = useUserStore()
   const session = useSessionStore((s) => s.session)
-  const {
-    credential,
-    config,
-    loading: vpnLoading,
-    error: vpnError,
-    loadCredentials,
-    loadConfig,
-  } = useVpnConfig()
-  const [sheetOpen, setSheetOpen] = useState(false)
-
-  async function handleOpenConfig() {
-    await loadCredentials()
-    const data = await loadConfig()
-    if (data) setSheetOpen(true)
-  }
 
   if (loading) {
     return (
@@ -115,41 +99,19 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Получить конфиг */}
-                <Button large onClick={handleOpenConfig}>
-                  Получить VPN конфиг
-                </Button>
-
-                <VpnConfigSheet
-                  opened={sheetOpen}
-                  onClose={() => setSheetOpen(false)}
-                  config={config}
-                />
-
                 {/* Если дней осталось мало, а автооплаты нет — можно все же показать кнопку продления */}
                 {!user.autopay_enabled && daysLeft <= 5 && (
                   <div className="mt-4">
                     <p className="text-[11px] text-orange-400 mb-2">
                       Советуем продлить заранее, чтобы не потерять доступ
                     </p>
-                    <Payment small /> {/* Можно сделать Payment компактным через пропсы */}
+                    <Payment /> {/* Можно сделать Payment компактным через пропсы */}
                   </div>
                 )}
               </Block>
             ) : (
               <Payment />
             )}
-
-            {/* Блок с трафиком (статистика) */}
-            <Block strong inset className="!my-2">
-              <div className="flex justify-between items-end mb-1">
-                <span className="text-xs text-gray-400">Использовано за месяц</span>
-                <span className="text-sm font-mono">12.4 GB / ∞</span>
-              </div>
-              <div className="w-full bg-gray-800 h-1 rounded-full">
-                <div className="bg-primary h-full w-[12%]" />
-              </div>
-            </Block>
 
             <Block
               strong
@@ -162,7 +124,10 @@ export default function Home() {
         )}
         {activeTab === "stats" && (
           <div className="animate-fadeIn">
-            <BlockTitle>Ваша статистика</BlockTitle>
+            <BlockTitle>Подключение</BlockTitle>
+            {/* Получить конфиг */}
+
+            <VpnConfigInline />
             <Block strong inset className="space-y-4">
               <div className="flex justify-between items-center border-b border-gray-800 pb-2">
                 <span className="text-gray-400">Использовано трафика</span>
@@ -188,12 +153,24 @@ export default function Home() {
           <div className="animate-fadeIn">
             <Connect />
             <BlockTitle>Настройки приложения</BlockTitle>
+            
+            {/* Блок с трафиком (статистика) */}
+            <Block strong inset className="!my-2">
+              <div className="flex justify-between items-end mb-1">
+                <span className="text-xs text-gray-400">Использовано за месяц</span>
+                <span className="text-sm font-mono">12.4 GB / ∞</span>
+              </div>
+              <div className="w-full bg-gray-800 h-1 rounded-full">
+                <div className="bg-primary h-full w-[12%]" />
+              </div>
+            </Block>
+
             <List strong inset>
-              <ListItem title="Уведомления" after={<Toggle defaultChecked small color="green" />} />
+              <ListItem title="Уведомления" after={<Toggle defaultChecked color="green" />} />
               <ListItem
                 title="Smart Mode"
                 subtitle="Автоматический выбор сервера"
-                after={<Toggle small />}
+                after={<Toggle />}
               />
             </List>
             <List strong inset>
@@ -211,13 +188,13 @@ export default function Home() {
           active={activeTab === "vpn"}
           onClick={() => setActiveTab("vpn")}
           icon={<span className="text-2xl">🛡️</span>}
-          label="VPN"
+          label="Главная"
         />
         <TabbarLink
           active={activeTab === "stats"}
           onClick={() => setActiveTab("stats")}
           icon={<span className="text-2xl">📈</span>}
-          label="Статистика"
+          label="Подключение"
         />
         <TabbarLink
           active={activeTab === "settings"}

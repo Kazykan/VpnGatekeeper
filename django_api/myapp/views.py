@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
-from myapp.domain.amnezia.parser_conf import generate_vpn_config_links
+from myapp.domain.amnezia.parser_conf import generate_simple_configs
 from myapp.tasks.check_payment import check_payment_status
 from myapp.domain.amnezia.services import collect_amnezia_stats
 from .models import TelegramUser, Payment, Credential, Server
@@ -143,18 +143,40 @@ class CredentialViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["user"]
 
-    @action(detail=True, methods=["get"], url_path="config-urls")
-    def get_config_urls(self, request, pk=None):
+    @action(detail=False, methods=["get"], url_path="config-by-tg")
+    def get_by_tg_id(self, request):
         """
-        GET /api/credentials/<id>/config-urls/
+        GET /api/credentials/config-by-tg/?telegram_id=123456789
+        Возвращает конфиги для (максимум) 3-х ключей пользователя.
         """
-        credential = self.get_object()
-        links = generate_vpn_config_links(credential)
+        telegram_id = request.query_params.get("telegram_id")
 
-        if not links:
-            return Response({"error": "Config is not ready"}, status=400)
+        if not telegram_id:
+            return Response({"error": "Параметр tg_id обязателен"}, status=400)
 
-        return Response(links)
+        # Получаем ключи пользователя (берем последние 3 созданных)
+        credentials = Credential.objects.filter(user__telegram_id=telegram_id).order_by(
+            "-id"
+        )[:3]
+
+        if not credentials.exists():
+            return Response(
+                {"error": "Ключи для данного пользователя не найдены"}, status=404
+            )
+
+        response_data = []
+        for cred in credentials:
+            configs = generate_simple_configs(cred)
+            if configs:
+                response_data.append(
+                    {
+                        "credential_id": cred.id,
+                        "user_name": cred.user.name,
+                        "configs": configs,
+                    }
+                )
+
+        return Response(response_data)
 
 
 class ServerViewSet(viewsets.ModelViewSet):
