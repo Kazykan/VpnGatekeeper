@@ -10,3 +10,4 @@ django-redis
 django-filter==25.2
 djangorestframework_simplejwt==5.5.1
 yookassa==3.9.0
+gunicorn==21.2.0
