@@ -23,6 +23,7 @@ ALLOWED_HOSTS = [
     "django:8000",  # ← можно, но не обязательно
     "*",
     "djangoapi.kocherbaev.ru",
+    "test_djangoapi.kocherbaev.ru",
 ]
 
 # Application definition
