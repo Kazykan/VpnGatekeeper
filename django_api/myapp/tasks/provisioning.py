@@ -11,11 +11,15 @@ logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, max_retries=3)
 def sync_vpn_cluster(self, telegram_id):
+    """
+    Первичное создание конфига для нового пользователя и синхронизация его на все Amnezia-серверы.
+    Если конфиг уже есть — выполняется логика разблокировки (на случай, если пользователь был заблокирован из-за неуплаты).
+    """
     try:
         user = TelegramUser.objects.get(telegram_id=telegram_id)
 
-        # 1. Находим все серверы типа Amnezia
-        all_amnezia_servers = Server.objects.filter(type="amnezia")
+        # 1. Находим все серверы типа Amnezia, исключая старый сервер
+        all_amnezia_servers = Server.objects.filter(type="amnezia").exclude(name__icontains="Old_server")
         master_server = all_amnezia_servers.first()
 
         if not master_server:
@@ -32,6 +36,9 @@ def sync_vpn_cluster(self, telegram_id):
         # 2. Проверяем наличие существующего конфига
         credential = Credential.objects.filter(user=user, server=master_server).first()
 
+        # Получаем старый сервер для блокировки/разблокировки IP
+        old_server = Server.objects.filter(type="amnezia", name__icontains="Old_server").first()
+
         if credential and credential.wg_conf:
             # СЛУЧАЙ А: Конфиг уже есть — РАЗБЛОКИРОВКА
             ip_match = re.search(r"Address\s*=\s*([\d\.]+)", credential.wg_conf)
@@ -39,25 +46,21 @@ def sync_vpn_cluster(self, telegram_id):
             if ip_match:
                 client_ip = ip_match.group(1)
                 logger.info(
-                    f"User {telegram_id} exists. Unblocking IP {client_ip} on all servers..."
+                    f"User {telegram_id} exists. Unblocking IP {client_ip} on OLD server..."
                 )
 
-                # Рассылаем разблокировку на ВСЕ серверы (включая мастер)
-                for server in all_amnezia_servers:
+                # Разблокировка только на старом сервере
+                if old_server:
                     try:
-                        gw = AmneziaGateway(
-                            api_url=server.api_url,
-                            username=server.api_username,
-                            password=server.api_password,
+                        old_gateway = AmneziaGateway(
+                            api_url=old_server.api_url,
+                            username=old_server.api_username,
+                            password=old_server.api_password,
                         )
-                        gw.unblock_ip(client_ip)
-                        logger.info(
-                            f"Successfully unblocked {client_ip} on {server.name}"
-                        )
+                        old_gateway.unblock_ip(client_ip)
+                        logger.info(f"Successfully unblocked {client_ip} on OLD server")
                     except Exception as e:
-                        logger.error(
-                            f"Failed to unblock {client_ip} on {server.name}: {e}"
-                        )
+                        logger.error(f"Failed to unblock {client_ip} on OLD server: {e}")  # <<< CHANGED
 
             credential.active = True
             credential.save()
@@ -88,8 +91,8 @@ def sync_vpn_cluster(self, telegram_id):
             wg_conf_data = master_configs.get("wg_conf")
             clients_table_data = master_configs.get("clients_table")
 
-            # Рассылаем файлы на Slave-серверы
-            slave_servers = all_amnezia_servers.exclude(id=master_server.id)
+            # Рассылаем файлы на Slave-серверы (без старого сервера)
+            slave_servers = all_amnezia_servers.exclude(id=master_server.id)  # <<< CHANGED
             for slave in slave_servers:
                 try:
                     slave_gateway = AmneziaGateway(
@@ -98,12 +101,8 @@ def sync_vpn_cluster(self, telegram_id):
                         password=slave.api_password,
                     )
 
-                    if not isinstance(wg_conf_data, str) or not isinstance(
-                        clients_table_data, str
-                    ):
-                        logger.error(
-                            "Master server returned invalid or empty config data"
-                        )
+                    if not isinstance(wg_conf_data, str) or not isinstance(clients_table_data, str):
+                        logger.error("Master server returned invalid or empty config data")
                         return
 
                     sync_res = slave_gateway.replace_configs(
@@ -111,9 +110,7 @@ def sync_vpn_cluster(self, telegram_id):
                     )
 
                     if "error" in sync_res:
-                        logger.error(
-                            f"Failed to sync slave {slave.name}: {sync_res['error']}"
-                        )
+                        logger.error(f"Failed to sync slave {slave.name}: {sync_res['error']}")
                     else:
                         logger.info(f"Successfully synced {slave.name}")
 

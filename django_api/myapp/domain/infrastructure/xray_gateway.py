@@ -1,5 +1,5 @@
 from py3xui import Api
-from django_api.myapp.domain.infrastructure.servers_schema import XrayServer
+from myapp.domain.infrastructure.servers_schema import XrayServer
 from typing import Any, cast
 
 

@@ -134,6 +134,11 @@ class DjangoAPI {
       return this.login()
     }
   }
+  async ensureAuth() {
+    if (this.accessToken) return
+
+    await this.login()
+  }
 
   // --- Публичные методы API ---
 
@@ -175,10 +180,12 @@ class DjangoAPI {
   }
 
   async getCredentialConfigByTg(telegram_id: string) {
-    // Получение всех подключений
+    await this.ensureAuth()
+
     const res = await this.api.get(`/api/credentials/config-by-tg/`, {
-      params: { telegram_id: telegram_id },
+      params: { telegram_id },
     })
+
     return res.data
   }
 }

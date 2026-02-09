@@ -1,11 +1,11 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Block, Button, Segmented, SegmentedButton, List, ListItem, Preloader } from "konsta/react"
+import { Block, Button, List, ListItem, Preloader, Segmented, SegmentedButton } from "konsta/react"
 import { useVpnConfig } from "../hooks/useVpnConfig"
-import { motion, AnimatePresence } from "framer-motion"
+import { AnimatePresence, motion } from "framer-motion"
 
 export function VpnConfigInline() {
-  const { configs, loading } = useVpnConfig()
+  const { configs, loading, status204, status404, fetchNewConfig } = useVpnConfig()
   const [device, setDevice] = useState<"ios" | "android">("ios")
 
   useEffect(() => {
@@ -51,6 +51,34 @@ export function VpnConfigInline() {
       </div>
     )
 
+  // 404 — пользователь нет / нет конфигов вообще
+  if (status404)
+    return (
+      <Block strong inset className="text-center opacity-60 text-sm">
+        У вас пока нет активных подключений. Купите подписку, чтобы получить конфиг.
+      </Block>
+    )
+
+  // 204 — есть только старые конфиги
+  if (status204)
+    return (
+      <Block strong inset className="text-center opacity-60 text-sm space-y-2">
+        <p>
+          У вас есть только старые конфиги. Старый конфиг перестанет работать после генерации
+          нового.
+        </p>
+        <Button
+          raised
+          onClick={() => {
+            fetchNewConfig()
+          }}
+        >
+          Получить новый конфиг
+        </Button>
+      </Block>
+    )
+
+  // configs есть → показываем как сейчас
   if (!configs || configs.length === 0)
     return (
       <Block strong inset className="text-center opacity-60 text-sm">

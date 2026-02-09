@@ -74,19 +74,27 @@ class Payment(models.Model):
 class Credential(models.Model):
     """Содержит данные для подключения пользователя к серверу
     Если пользователь не оплатил тут мы храним оригинальные данные
-    На сервере меняем preshared_key или отключаем юзера"""
+    Блокировка по IP выполняется на уровне сервера, а не удалением конфига, чтобы не потерять данные при блокировке из-за неуплаты
+    """
 
     id = models.AutoField(primary_key=True)
     user = models.ForeignKey(
         "TelegramUser", on_delete=models.CASCADE, related_name="credentials"
     )
-    server = models.ForeignKey(
-        "Server", on_delete=models.CASCADE, related_name="credentials"
-    )
+    wg_conf_enpoint = models.TextField(
+        blank=True, null=True
+    )  # Endpoint подключения из конфига
     wg_conf = models.TextField(blank=True, null=True)  # готовый .conf
+    wg_conf_ip = models.TextField(blank=True, null=True)  # IP из конфига для блокировки
+    wg_conf_old_server = models.BooleanField(
+        default=False
+    )  # флаг, что конфиг с "старого" сервера (для блокировки/разблокировки)
     vless_url = models.TextField(blank=True, null=True)  # ссылка vless://...
     created_at = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.user.telegram_id}|{self.user.name}  Credential {self.id} - Active: {self.active} - Old Server: {self.wg_conf_old_server}"
 
 
 class Server(models.Model):

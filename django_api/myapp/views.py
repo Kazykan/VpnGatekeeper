@@ -6,6 +6,10 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
+from myapp.domain.credentials.exceptions import NoActiveSubscription
+from myapp.domain.credentials.services import generate_new_config_for_user
+from myapp.tasks.provisioning import sync_vpn_cluster
+from myapp.domain.infrastructure.amnezia_gateway import AmneziaGateway
 from myapp.domain.amnezia.parser_conf import generate_simple_configs
 from myapp.tasks.check_payment import check_payment_status
 from myapp.domain.amnezia.services import collect_amnezia_stats
@@ -146,37 +150,73 @@ class CredentialViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="config-by-tg")
     def get_by_tg_id(self, request):
         """
-        GET /api/credentials/config-by-tg/?telegram_id=123456789
-        Возвращает конфиги для (максимум) 3-х ключей пользователя.
+        Возвращает конфиги пользователя для новых серверов (максимум 3).
         """
         telegram_id = request.query_params.get("telegram_id")
-
         if not telegram_id:
-            return Response({"error": "Параметр tg_id обязателен"}, status=400)
+            return Response({"error": "Параметр telegram_id обязателен"}, status=400)
 
-        # Получаем ключи пользователя (берем последние 3 созданных)
-        credentials = Credential.objects.filter(user__telegram_id=telegram_id).order_by(
-            "-id"
-        )[:3]
+        try:
+            user = TelegramUser.objects.get(telegram_id=telegram_id)
+        except TelegramUser.DoesNotExist:
+            # Пользователя нет вообще
+            return Response({"error": "Пользователь не найден"}, status=404)
 
-        if not credentials.exists():
+        # Проверяем наличие новых конфигов
+        new_credentials = Credential.objects.filter(
+            user__telegram_id=telegram_id, wg_conf_old_server=False
+        ).order_by("-id")[:3]
+
+        if new_credentials.exists():
+            # Есть новые конфиги → возвращаем их
+            response_data = []
+            for cred in new_credentials:
+                configs = generate_simple_configs(cred)
+                if configs:
+                    response_data.append(
+                        {
+                            "credential_id": cred.id,
+                            "user_name": user.name,
+                            "configs": configs,
+                        }
+                    )
+            return Response(response_data, status=200)
+
+        # Если новых конфигов нет, проверяем, есть ли старые
+        old_exists = Credential.objects.filter(
+            user__telegram_id=telegram_id, wg_conf_old_server=True
+        ).exists()
+        if old_exists:
+            # Пользователь есть, только старые конфиги → 204 No Content
             return Response(
-                {"error": "Ключи для данного пользователя не найдены"}, status=404
+                {"error": "Пользователь имеет только старые конфиги"}, status=204
             )
 
-        response_data = []
-        for cred in credentials:
-            configs = generate_simple_configs(cred)
-            if configs:
-                response_data.append(
-                    {
-                        "credential_id": cred.id,
-                        "user_name": cred.user.name,
-                        "configs": configs,
-                    }
-                )
+        # Пользователь есть, но у него вообще нет конфигов
+        return Response({"error": "Конфигов для пользователя не найдено"}, status=404)
 
-        return Response(response_data)
+    @action(detail=False, methods=["post"], url_path="generate-new-config")
+    def generate_new_config(self, request):
+        """Генерирует новый конфиг для пользователя и блокирует старый (если он есть)."""
+        telegram_id = request.query_params.get("telegram_id")
+        if not telegram_id:
+            return Response({"error": "telegram_id обязателен"}, status=400)
+
+        try:
+            user = TelegramUser.objects.get(telegram_id=telegram_id)
+            generate_new_config_for_user(user)
+        except TelegramUser.DoesNotExist:
+            return Response({"error": "Пользователь не найден"}, status=404)
+        except NoActiveSubscription:
+            return Response(
+                {"error": "Нет активной подписки"},
+                status=403,
+            )
+
+        return Response(
+            {"message": "Новый конфиг создается. Старый заблокирован"},
+            status=200,
+        )
 
 
 class ServerViewSet(viewsets.ModelViewSet):
