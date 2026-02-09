@@ -18,13 +18,13 @@ export async function GET(req: Request) {
     }
 
     // 204 — есть только старые конфиги
-    return NextResponse.json(null, { status: 204 })
+    return new Response(null, { status: 204 })
   } catch (error: any) {
     const status = error.response?.status
 
     if (status === 404) {
       // пользователя нет
-      return NextResponse.json(null, { status: 404 })
+      return new Response(null, { status: 404 })
     }
 
     if (status === 401) {

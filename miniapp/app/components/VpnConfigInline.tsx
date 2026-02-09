@@ -1,8 +1,8 @@
 "use client"
 import { useState, useEffect } from "react"
 import { Block, Button, List, ListItem, Preloader, Segmented, SegmentedButton } from "konsta/react"
-import { useVpnConfig } from "../hooks/useVpnConfig"
 import { AnimatePresence, motion } from "framer-motion"
+import { useVpnConfig } from "../hooks/VpnConfigInline"
 
 export function VpnConfigInline() {
   const { configs, loading, status204, status404, fetchNewConfig } = useVpnConfig()
