@@ -1,20 +1,19 @@
-# Базовый образ
 FROM node:20
 
-
-# Рабочая директория
 WORKDIR /app
 
-# Устанавливаем зависимости отдельно — это ускоряет сборку
-COPY package.json package-lock.json ./
+# Копируем файлы зависимостей
+COPY package.json package-lock.json* ./
 
-RUN npm install
+# Использование --legacy-peer-deps критично для React 19
+RUN npm install --legacy-peer-deps
 
 # Копируем остальной код
 COPY . .
 
-# Открываем порт
+# Очищаем кэш Next.js, если он попал в билд-контекст
+RUN rm -rf .next
+
 EXPOSE 3000
 
-# Запуск dev-сервера
 CMD ["npm", "run", "dev"]
