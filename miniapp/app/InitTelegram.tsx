@@ -85,8 +85,6 @@ export default function InitTelegram() {
     }
 
     // 2. В ЛЮБОМ СЛУЧАЕ идем на сервер за актуальными данными.
-    // Это решит проблему со старой датой: даже если юзер видит старую дату секунду,
-    // она обновится сразу после завершения fetch.
     authorize()
   }, [setUser, setError, setLoading, setSession])
 

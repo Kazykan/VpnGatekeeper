@@ -1,5 +1,7 @@
+# myapp/domain/subscription/services.py
 from datetime import date
 import uuid
+from myapp.tasks.provisioning import sync_vpn_cluster
 from myapp.domain.infrastructure.yookassa_gateway import create_recurring_payment
 from myapp.models import Payment, TelegramUser
 from celery import shared_task
@@ -14,29 +16,53 @@ from myapp.domain.infrastructure.telegram_gateway import (
 
 @shared_task
 def extend_subscription_task(user_id, months):
-    """Добавляет месяцы к подписке пользователя"""
+    """Добавляет месяцы к подписке пользователя и запускает синхронизацию"""
     print(
         f"extend_subscription_task user_id={user_id}, months={months}",
         flush=True,
     )
+
+    inviter_to_notify = None
+    target_user_tg_id = None
+
+    # 1. Атомарно обновляем данные в БД
     with transaction.atomic():
         user = TelegramUser.objects.select_for_update().get(id=user_id)
+        target_user_tg_id = user.telegram_id
 
         print(f"user found: {user.name}, current end_date: {user.end_date}", flush=True)
+
+        # Рассчитываем и сохраняем новую дату
         user.end_date = calculate_new_end_date(user.end_date, months)
+
+        # Логика рефералов
         inviter = apply_inviter_bonus(user)
         user.save()
-        if inviter:
-            inviter.save()
 
         if inviter:
-            send_message(
-                inviter.telegram_id,
-                f"Вам начислено +20 дней за приглашение {user.name}!",
-            )
-            send_message_to_admin_chanel(
-                f"Пользователю: {inviter.name} - {inviter.telegram_id} начислено +20 дней\nза приглашение {user.name}!",
-            )
+            inviter.save()
+            inviter_to_notify = {
+                "tg_id": inviter.telegram_id,
+                "inviter_name": inviter.name,
+                "referral_name": user.name,
+            }
+
+    # 2. Отправляем уведомления (вне транзакции)
+    if inviter_to_notify:
+        send_message(
+            inviter_to_notify["tg_id"],
+            f"Вам начислено +20 дней за приглашение {inviter_to_notify['referral_name']}!",
+        )
+        send_message_to_admin_chanel(
+            f"Пользователю: {inviter_to_notify['inviter_name']} - {inviter_to_notify['tg_id']} "
+            f"начислено +20 дней\nза приглашение {inviter_to_notify['referral_name']}!",
+        )
+
+    # 3. ЗАПУСКАЕМ СИНХРОНИЗАЦИЮ
+    # Теперь, когда транзакция завершена (commit), данные в БД актуальны
+    if target_user_tg_id:
+        print(f"Triggering sync_vpn_cluster for {target_user_tg_id}", flush=True)
+        sync_vpn_cluster.delay(target_user_tg_id)  # type: ignore
 
 
 def process_autopayment_for_user(user_id):

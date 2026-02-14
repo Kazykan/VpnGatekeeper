@@ -1,4 +1,5 @@
 from doctest import master
+import uuid
 from django.db import models
 from django.utils import timezone
 
@@ -6,6 +7,8 @@ from django.utils import timezone
 class TelegramUser(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
+    # Уникальный токен для получения ссылки подписки
+    sub_token = models.UUIDField(default=uuid.uuid4, unique=True)
     telegram_id = models.BigIntegerField(unique=True)
     xray_id = models.CharField(
         max_length=100,
@@ -72,15 +75,43 @@ class Payment(models.Model):
 
 
 class Credential(models.Model):
-    """Содержит данные для подключения пользователя к серверу
-    Если пользователь не оплатил тут мы храним оригинальные данные
-    Блокировка по IP выполняется на уровне сервера, а не удалением конфига, чтобы не потерять данные при блокировке из-за неуплаты
-    """
-
     id = models.AutoField(primary_key=True)
     user = models.ForeignKey(
         "TelegramUser", on_delete=models.CASCADE, related_name="credentials"
     )
+    server = models.ForeignKey(
+        "Server", on_delete=models.CASCADE, related_name="credentials"
+    )
+
+    # Для статистики
+    # Статистика
+    up_traff = models.BigIntegerField(default=0, verbose_name="Загружено (байты)")
+    down_traff = models.BigIntegerField(default=0, verbose_name="Скачано (байты)")
+    total_traff = models.BigIntegerField(default=0, verbose_name="Всего (байты)")
+    last_seen = models.DateTimeField(
+        null=True, blank=True, verbose_name="Последнее подключение"
+    )
+    traffic_offset = models.BigIntegerField(default=0)
+
+    # Данные для связи с 3x-ui API
+    inbound_id = models.IntegerField(
+        null=True, blank=True, help_text="ID инбаунда в панели 3x-ui"
+    )
+    client_email = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Email клиента в панели (используется как ID для API)",
+    )
+
+    # Конфиги
+    vless_url = models.TextField(
+        blank=True, null=True, verbose_name="Готовая ссылка vless://"
+    )
+
+    # Для WireGuard/Amnezia
+    wg_conf = models.TextField(blank=True, null=True)
+    wg_conf_ip = models.TextField(blank=True, null=True)
     wg_conf_enpoint = models.TextField(
         blank=True, null=True
     )  # Endpoint подключения из конфига
@@ -89,25 +120,64 @@ class Credential(models.Model):
     wg_conf_old_server = models.BooleanField(
         default=False
     )  # флаг, что конфиг с "старого" сервера (для блокировки/разблокировки)
-    vless_url = models.TextField(blank=True, null=True)  # ссылка vless://...
-    created_at = models.DateTimeField(auto_now_add=True)
+
     active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def monthly_usage_bytes(self):
+        """Возвращает потребление трафика с начала расчетного периода."""
+        usage = self.total_traff - self.traffic_offset
+        return usage if usage > 0 else 0
+
+    @property
+    def monthly_usage_gb(self):
+        return round(self.monthly_usage_bytes / (1024**3), 2)
+
+    @property
+    def total_gb(self):
+        """Всего накоплено на сервере за все время в ГБ"""
+        return round(self.total_traff / (1024**3), 3)
 
     def __str__(self):
-        return f"{self.user.telegram_id}|{self.user.name}  Credential {self.id} - Active: {self.active} - Old Server: {self.wg_conf_old_server}"
+        return f"{self.user.name} @ {self.server.name} (Active: {self.active})"
 
 
 class Server(models.Model):
-    id = models.AutoField(primary_key=True)  # Добавьте эту строку
-    name = models.CharField(max_length=100)  # удобное имя
-    api_url = models.CharField(max_length=255)
-    type = models.CharField(
-        max_length=20, choices=[("amnezia", "AmneziaWG"), ("xray", "3x-ui")]
-    )
+    id = models.AutoField(primary_key=True)
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    name = models.CharField(max_length=100, verbose_name="Имя сервера")
+    api_url = models.CharField(max_length=255, help_text="Напр: http://1.2.3.4:2053")
     api_username = models.CharField(max_length=100, blank=True, null=True)
-    api_password = models.CharField(
-        max_length=255, blank=True, null=True
-    )  # Желательно зашифровать
+    api_password = models.CharField(max_length=255, blank=True, null=True)
+
+    type = models.CharField(
+        max_length=20,
+        choices=[("amnezia", "AmneziaWG"), ("xray", "3x-ui")],
+        default="xray",
+    )
+
+    inbound_id = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="ID инбаунда для 3x-ui (только для серверов типа xray)",
+    )
+
+    # --- ЛОГИКА РЕЛЕЯ (ПРОКЛАДКИ) ---
+    is_relay = models.BooleanField(
+        default=False,
+        verbose_name="Это транзитный сервер (РФ)",
+        help_text="Если включено, трафик будет идти через этот сервер к основному",
+    )
+    upstream_server = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="relays",
+        verbose_name="Целевой сервер (Европа)",
+        help_text="Укажите основной сервер, на который этот сервер должен пересылать трафик",
+    )
 
     def __str__(self):
-        return f"{self.name} ({self.type})"
+        return f"{self.name} ({'RELAY' if self.is_relay else 'MASTER'})"

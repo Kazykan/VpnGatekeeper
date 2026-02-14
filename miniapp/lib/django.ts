@@ -28,7 +28,7 @@ class DjangoAPI {
       headers: {
         "Content-Type": "application/json",
       },
-      validateStatus: (status) => status === 200 || status === 204,
+      validateStatus: (status) => status >= 200 && status < 300,
     })
 
     this.plainApi = axios.create({

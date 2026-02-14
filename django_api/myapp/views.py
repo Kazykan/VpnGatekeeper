@@ -1,11 +1,18 @@
 from typing import cast
 import logging
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
+from myapp.domain.subscription.calculations import prepare_subscription_data
+from myapp.domain.credentials.selectors import (
+    get_active_credentials_for_user,
+    get_user_traffic_report,
+)
 from myapp.domain.credentials.exceptions import NoActiveSubscription
 from myapp.domain.credentials.services import generate_new_config_for_user
 from myapp.tasks.provisioning import sync_vpn_cluster
@@ -33,6 +40,25 @@ class TelegramUserViewSet(viewsets.ModelViewSet):
     serializer_class = TelegramUserSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["telegram_id", "invited_by"]
+
+    @action(detail=False, methods=["get"], url_path="full-stats")
+    def get_stats_by_tg_id(self, request):
+        """
+        Получение полной статистики по трафику через telegram_id пользователя.
+        Пример: /api/telegram-users/full-stats/?telegram_id=12345
+        """
+        tg_id = request.query_params.get("telegram_id")
+        if not tg_id:
+            return Response({"error": "Параметр telegram_id обязателен"}, status=400)
+
+        try:
+            user = TelegramUser.objects.get(telegram_id=tg_id)
+        except TelegramUser.DoesNotExist:
+            return Response({"error": "Пользователь не найден"}, status=404)
+
+        # Вызываем наш селектор
+        report = get_user_traffic_report(user)
+        return Response(report)
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -232,3 +258,35 @@ class AllAmneziaStatsView(APIView):
     def get(self, request):
         results = collect_amnezia_stats()
         return Response({"total_servers": len(results), "servers_stats": results})
+
+
+def user_sub_link_view(request, token):
+    """
+    Эндпоинт для Happ/Hiddify.
+    URL: /sub/<uuid:token>/
+    """
+    # 1. Selector
+    user = get_object_or_404(TelegramUser, sub_token=token)
+    credentials = get_active_credentials_for_user(user)
+
+    # 2. Domain Logic
+    sub_data = prepare_subscription_data(user, credentials)
+
+    # 3. Formating Response
+    content = "\n".join(sub_data.links)
+    response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+
+    # Заголовок, который Happ распарсит для отображения графиков трафика
+    user_info_header = (
+        f"upload={sub_data.upload_bytes}; "
+        f"download={sub_data.download_bytes}; "
+        f"total={sub_data.total_limit_bytes}; "
+        f"expire={sub_data.expire_timestamp}"
+    )
+
+    response["Subscription-Userinfo"] = user_info_header
+    response["Profile-Title"] = f"VPN-{user.name}"
+    # Интервал обновления (в часах)
+    response["Profile-Update-Interval"] = "6"
+
+    return response

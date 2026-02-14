@@ -21,7 +21,9 @@ def calculate_new_end_date(
     else:
         current_end_date = today
 
-    new_end_date = current_end_date + relativedelta(months=months_to_add)
+    new_end_date = (
+        current_end_date + relativedelta(months=months_to_add) + timedelta(days=1)
+    )
     return new_end_date
 
 
@@ -43,7 +45,7 @@ def calculate_new_end_date_days(
     else:
         current_end_date = today
 
-    new_end_date = current_end_date + timedelta(days=days_to_add)
+    new_end_date = current_end_date + timedelta(days=days_to_add) + timedelta(days=1)
     print(
         f"calculate new end date days: {new_end_date} old: {current_end_date_str}",
         flush=True,

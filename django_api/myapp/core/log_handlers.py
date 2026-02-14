@@ -19,7 +19,7 @@ class TelegramHandler(logging.Handler):
             }
 
             requests.post(
-                f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage",
+                f"https://api.telegram.org/bot{settings.TELEGRAM_TOKEN}/sendMessage",
                 json=payload,
                 timeout=10,
             )

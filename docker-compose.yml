@@ -38,7 +38,7 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - ADMIN_CHANNEL_ID=${ADMIN_CHANNEL_ID}
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
@@ -62,11 +62,32 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - ADMIN_CHANNEL_ID=${ADMIN_CHANNEL_ID}
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
       - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
+      - YOOKASSA_API_KEY=${YOOKASSA_API_KEY}
+      - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
+
+  celery_beat:
+    build: ./django_api
+    container_name: celery_beat
+    command: celery -A backend beat --loglevel=info
+    volumes:
+      - ./django_api:/app
+    depends_on:
+      - django
+      - redis
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-django_db}
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pass}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - ADMIN_CHANNEL_ID=${ADMIN_CHANNEL_ID}
       - YOOKASSA_API_KEY=${YOOKASSA_API_KEY}
       - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
 

@@ -4,7 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}"
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{settings.TELEGRAM_TOKEN}"
 ADMIN_CHANNEL_ID = settings.ADMIN_CHANNEL_ID
 
 

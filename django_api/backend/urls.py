@@ -11,6 +11,7 @@ from myapp.views import (
     PaymentViewSet,
     ServerViewSet,
     TelegramUserViewSet,
+    user_sub_link_view,
 )
 
 router = DefaultRouter()
@@ -31,5 +32,5 @@ urlpatterns = [
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/yookassa/webhook/", YooKassaWebhookView.as_view()),
-
+    path("sub/<uuid:token>/", user_sub_link_view, name="sub-link"),
 ]
