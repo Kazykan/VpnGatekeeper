@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Block, Button, List, ListItem, Preloader, Segmented, SegmentedButton } from "konsta/react"
 import { motion } from "framer-motion"
 import { useUserStore } from "@/store/useUserStore"
+import { Siren } from "lucide-react"
 
 export function VpnConfigInline() {
   const { user, loading } = useUserStore()
@@ -63,7 +64,9 @@ export function VpnConfigInline() {
   if (!user || !isSubscriptionActive || !user.sub_token) {
     return (
       <Block strong inset className="text-center py-8">
-        <div className="text-4xl mb-4">📅</div>
+        <div className="text-4xl mb-4">
+          <Siren />
+        </div>
         <p className="opacity-60 text-sm">
           У вас нет активной подписки или срок её действия истек.
           <br />
@@ -110,9 +113,8 @@ export function VpnConfigInline() {
                 2. Нажмите кнопку <span className="font-bold">"Копировать"</span> ниже.
               </p>
               <p>
-                3. В приложении: <span className="font-bold text-primary">Settings</span> →{" "}
-                <span className="font-bold text-primary">Subscription</span> →{" "}
-                <span className="font-bold text-primary">"+"</span>.
+                3. В приложении: <span className="font-bold text-primary">Из Буфера</span> →{" "}
+                <span className="font-bold text-primary">"Вставить"</span>.
               </p>
               <p>
                 4. Вставьте ссылку и нажмите <span className="font-bold">Done</span>.
@@ -136,7 +138,7 @@ export function VpnConfigInline() {
               </p>
               <p>
                 3. В приложении: <span className="font-bold text-primary">Меню</span> →{" "}
-                <span className="font-bold text-primary">Группы подписок</span> →{" "}
+                <span className="font-bold text-primary">Копировать из буфера</span> →{" "}
                 <span className="font-bold text-primary">"+"</span>.
               </p>
               <p>

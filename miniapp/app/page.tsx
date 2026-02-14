@@ -3,6 +3,7 @@
 import React, { useState } from "react"
 import { useUserStore } from "@/store/useUserStore"
 import { VpnConfigInline } from "./components/VpnConfigInline"
+import { GlobeLock, Settings, Unplug } from "lucide-react"
 import {
   Page,
   Block,
@@ -21,6 +22,7 @@ import { Payment } from "./components/Payment"
 import { Header } from "./components/Header"
 import { UserInfo } from "./components/UserInfo"
 import { TrafficStats } from "./components/TrafficStats"
+import { ReferralCard } from "./components/ReferralCard"
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("vpn")
@@ -71,46 +73,55 @@ export default function Home() {
             <UserInfo user={user} />
 
             {isSubscriptionActive ? (
-              <Block strong inset className="!my-2 border-l-4 border-primary bg-primary/5">
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">
-                      Подписка активна
-                    </p>
-                    <p className="text-xl font-bold">Осталось: {daysLeft} дн.</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-gray-500 uppercase">
-                      До {endDate?.toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-
-                {user.autopay_enabled && autopayDate && (
-                  <div className="mt-4 p-2 bg-black/20 rounded-lg flex items-center gap-2">
-                    <span className="text-lg">💳</span>
-                    <div className="text-[11px] leading-tight text-gray-300">
-                      Автопродление включено. Списание произойдет <br />
-                      <span className="text-primary font-semibold">
-                        {autopayDate.toLocaleDateString()}
-                      </span>{" "}
-                      (за 2 дня до конца)
+              <>
+                <Block strong inset className="!my-2 border-l-4 border-primary bg-primary/5">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider">
+                        Подписка активна
+                      </p>
+                      <p className="text-xl font-bold">Осталось: {daysLeft} дн.</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-gray-500 uppercase">
+                        До {endDate?.toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
-                )}
 
-                {/* Если дней осталось мало, а автооплаты нет — можно все же показать кнопку продления */}
-                {!user.autopay_enabled && daysLeft <= 5 && (
-                  <div className="mt-4">
-                    <p className="text-[11px] text-orange-400 mb-2">
-                      Советуем продлить заранее, чтобы не потерять доступ
-                    </p>
-                    <Payment /> {/* Можно сделать Payment компактным через пропсы */}
-                  </div>
-                )}
-              </Block>
+                  {user.autopay_enabled && autopayDate && (
+                    <div className="mt-4 p-2 bg-black/20 rounded-lg flex items-center gap-2">
+                      <span className="text-lg">💳</span>
+                      <div className="text-[11px] leading-tight text-gray-300">
+                        Автопродление включено. Списание произойдет <br />
+                        <span className="text-primary font-semibold">
+                          {autopayDate.toLocaleDateString()}
+                        </span>{" "}
+                        (за 2 дня до конца)
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Если дней осталось мало, а автооплаты нет — можно все же показать кнопку продления */}
+                  {!user.autopay_enabled && daysLeft <= 5 && (
+                    <div className="mt-4">
+                      <p className="text-[11px] text-orange-400 mb-2">
+                        Советуем продлить заранее, чтобы не потерять доступ
+                      </p>
+                      <Payment /> {/* Можно сделать Payment компактным через пропсы */}
+                    </div>
+                  )}
+                </Block>
+                {/* РЕФЕРАЛКА ПРИ АКТИВНОЙ ПОДПИСКЕ */}
+                <ReferralCard />
+              </>
             ) : (
-              <Payment />
+              <>
+                {/* СНАЧАЛА ОПЛАТА, ЕСЛИ ПОДПИСКА ИСТЕКЛА */}
+                <Payment />
+                {/* РЕФЕРАЛКА ПОД ОПЛАТОЙ */}
+                <ReferralCard />
+              </>
             )}
 
             <Block
@@ -133,19 +144,7 @@ export default function Home() {
         )}
         {activeTab === "settings" && (
           <div className="animate-fadeIn">
-
             <BlockTitle>Настройки приложения</BlockTitle>
-
-            {/* Блок с трафиком (статистика) */}
-            <Block strong inset className="!my-2">
-              <div className="flex justify-between items-end mb-1">
-                <span className="text-xs text-gray-400">Использовано за месяц</span>
-                <span className="text-sm font-mono">12.4 GB / ∞</span>
-              </div>
-              <div className="w-full bg-gray-800 h-1 rounded-full">
-                <div className="bg-primary h-full w-[12%]" />
-              </div>
-            </Block>
 
             <List strong inset>
               <ListItem title="Уведомления" after={<Toggle defaultChecked color="green" />} />
@@ -169,19 +168,31 @@ export default function Home() {
         <TabbarLink
           active={activeTab === "vpn"}
           onClick={() => setActiveTab("vpn")}
-          icon={<span className="text-2xl">🛡️</span>}
+          icon={
+            <span className="text-2xl">
+              <GlobeLock />
+            </span>
+          }
           label="Главная"
         />
         <TabbarLink
           active={activeTab === "stats"}
           onClick={() => setActiveTab("stats")}
-          icon={<span className="text-2xl">📈</span>}
+          icon={
+            <span className="text-2xl">
+              <Unplug />
+            </span>
+          }
           label="Подключение"
         />
         <TabbarLink
           active={activeTab === "settings"}
           onClick={() => setActiveTab("settings")}
-          icon={<span className="text-2xl">⚙️</span>}
+          icon={
+            <span className="text-2xl">
+              <Settings />
+            </span>
+          }
           label="Настройки"
         />
       </Tabbar>

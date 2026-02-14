@@ -32,46 +32,7 @@ async def cmd_start(message: types.Message, command: CommandObject):
 
     # 2. Обработка аргументов (если они есть)
     if args:
-        # --- СЦЕНАРИЙ А: Оплата из Mini App ---
-        if args.startswith("pay_"):
-            # Разбираем строку типа "pay_80_once"
-            try:
-                parts = args.split("_")
-                amount = int(parts[1])
-                pay_type = parts[2]  # "once" или "sub"
-
-                # Если по какой-то причине юзера нет в БД, регистрируем без реферала
-                if not is_registered:
-                    await django_api.register_user(
-                        tg_id=tg_id, name=name, invited_by=None
-                    )
-
-                await message.answer(
-                    f"💳 Вы выбрали тариф: {amount}₽ ({'подписка' if pay_type == 'sub' else 'разово'})"
-                )
-                # Здесь вызывай свою функцию оплаты:
-                amount = int(parts[1])
-                tariff = TARIFFS.get(amount)
-                if not tariff:
-                    await message.answer("Тариф не найден.")
-                    return
-                months = period_to_months(tariff["period"])
-                unique_payload = f"{uuid.uuid4()}-{tg_id}-{months}-{amount}"
-                resp = await django_api.create_payment(
-                    tg_id=tg_id,
-                    amount=amount,
-                    pay_type=tariff["type"],
-                    months=months,
-                    unique_payload=unique_payload,
-                )
-                confirmation_url = resp.get(
-                    "confirmation_url"
-                )  # отправляешь кнопку с confirmation_url
-                return
-            except (IndexError, ValueError):
-                await message.answer("Ошибка в параметрах оплаты.")
-
-        # --- СЦЕНАРИЙ Б: Реферальная ссылка ---
+        # --- Реферальная ссылка ---
         # Извлекаем ID, убирая префикс
         ref_str = args.replace("inv_", "")
 
