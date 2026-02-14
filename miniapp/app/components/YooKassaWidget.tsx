@@ -2,27 +2,42 @@
 
 import React, { useEffect } from "react"
 
+// Описываем, что именно возвращает конструктор виджета
+interface YookassaCheckoutInstance {
+  render: (containerId: string) => void
+  on: (event: string, callback: () => void) => void
+  destroy: () => void
+}
+
+// Описываем структуру самого конструктора в объекте window
+interface YooMoneyCheckoutWidgetConstructor {
+  new (config: {
+    confirmation_token: string
+    full_size?: boolean
+    error_callback?: (error: Error) => void
+  }): YookassaCheckoutInstance
+}
+
 interface Props {
   confirmationToken: string
   onSuccess: () => void
-  onError: (error: any) => void
+  onError: (error: Error | string) => void // Типизируем ошибку
 }
 
 declare global {
   interface Window {
-    YooMoneyCheckoutWidget: any
+    YooMoneyCheckoutWidget: YooMoneyCheckoutWidgetConstructor
   }
 }
 
 const YooKassaWidget: React.FC<Props> = ({ confirmationToken, onSuccess, onError }) => {
   useEffect(() => {
-    // 1. Функция инициализации
     const initWidget = () => {
       if (window.YooMoneyCheckoutWidget) {
         const checkout = new window.YooMoneyCheckoutWidget({
           confirmation_token: confirmationToken,
-          full_size: true, // виджет займет весь контейнер
-          error_callback: (error: any) => {
+          full_size: true,
+          error_callback: (error: Error) => {
             console.error("Yookassa Widget Error:", error)
             onError(error)
           },
@@ -36,18 +51,15 @@ const YooKassaWidget: React.FC<Props> = ({ confirmationToken, onSuccess, onError
           onError(new Error("Payment failed"))
         })
 
-        // Рендерим в div с id="payment-form"
         checkout.render("payment-form")
       }
     }
 
-    // 2. Проверяем, загружен ли уже скрипт
     if (document.getElementById("yookassa-script")) {
       initWidget()
       return
     }
 
-    // 3. Если нет — загружаем динамически
     const script = document.createElement("script")
     script.id = "yookassa-script"
     script.src = "https://yookassa.ru/checkout-widget/v1/checkout-widget.js"
@@ -55,11 +67,7 @@ const YooKassaWidget: React.FC<Props> = ({ confirmationToken, onSuccess, onError
     script.onload = initWidget
     script.onerror = () => onError(new Error("Не удалось загрузить скрипт ЮKassa"))
     document.body.appendChild(script)
-
-    return () => {
-      // Очищать скрипт не обязательно, чтобы не загружать заново при смене тарифа
-    }
-  }, [confirmationToken])
+  }, [confirmationToken, onSuccess, onError]) // Добавили зависимости для линтера
 
   return (
     <div className="w-full bg-white p-2 rounded-lg">

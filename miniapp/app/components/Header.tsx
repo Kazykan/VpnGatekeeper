@@ -3,8 +3,14 @@
 import { Navbar, NavbarBackLink } from "konsta/react"
 import Image from "next/image"
 import { Avatar } from "./Avatar" // Предполагаю, он там
+import { User } from "../types/user";
 
-export function Header({ user, session }: { user: any; session: any }) {
+interface HeaderProps {
+  user: User | null; // Добавил | null, так как на старте юзера может не быть
+  session: string | null; // Заменили any на реальный тип из стора
+}
+
+export function Header({ user, session }: HeaderProps) {
   return (
     <Navbar
       // Логотип и название слева

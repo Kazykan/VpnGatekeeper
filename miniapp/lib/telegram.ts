@@ -3,8 +3,6 @@ import crypto from "crypto"
 // Публичные ключи Telegram (официальные)
 const TELEGRAM_PUBLIC_KEY_PROD = "e7bf03a2fa4602af4580703d88dda5bb59f32ed8b02a56c187fe7d34caed242d"
 
-const TELEGRAM_PUBLIC_KEY_TEST = "40055058a4ee38156a06562e52eece92a771bcd8346a8c4615cb7376eddf72ec"
-
 // Определяем окружение (production/test)
 const TELEGRAM_PUBLIC_KEY = TELEGRAM_PUBLIC_KEY_PROD
 
@@ -72,7 +70,7 @@ export function validateInitData(initData: string, botToken: string): boolean {
         format: "der",
         type: "spki",
       },
-      signatureBytes
+      signatureBytes,
     )
   }
 

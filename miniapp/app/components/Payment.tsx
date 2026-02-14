@@ -15,6 +15,7 @@ import {
 import { useUserStore } from "@/store/useUserStore"
 import YooKassaWidget from "./YooKassaWidget"
 import { api } from "@/lib/api"
+import { getErrorMessage } from "@/lib/utils"
 
 interface CreatePaymentResponse {
   payment_id: number
@@ -97,9 +98,8 @@ export function Payment() {
       setCurrentPaymentId(data.payment_id)
       setToken(data.confirmation_token)
       setShowWidget(true)
-    } catch (e: any) {
-      const errorMsg = e.response?.data?.error || "Ошибка создания платежа"
-      setErrorDialog({ opened: true, message: errorMsg })
+    } catch (e) {
+      setErrorDialog({ opened: true, message: getErrorMessage(e) })
     } finally {
       setIsProcessing(false)
     }

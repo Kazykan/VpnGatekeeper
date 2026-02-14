@@ -1,7 +1,6 @@
 import { User } from "@/app/types/user"
 import { api } from "@/lib/api"
 import { create } from "zustand"
-import axios from "axios"
 
 export interface TrafficData {
   usedGb: string

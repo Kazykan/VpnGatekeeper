@@ -1,8 +1,9 @@
 "use client"
 
 import { Block, List, ListItem } from "konsta/react"
+import { User } from "../types/user"
 
-export function UserInfo({ user }: { user: any }) {
+export function UserInfo({ user }: { user: User }) {
   return (
     <Block strong inset className="!my-4">
       <div className="flex flex-col gap-1">

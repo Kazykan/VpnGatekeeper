@@ -1,6 +1,6 @@
 "use client"
 
-import { User } from "@/store/useUserStore"
+import { User } from "../types/user"
 import { useEffect, useState } from "react"
 import { useSessionStore } from "@/store/useSessionStore"
 
