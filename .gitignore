@@ -8,4 +8,4 @@ test.db
 .history-memo/2025-11-04.md
 django_api/logs
 django_api/database.db
-django_api/celerybeat-schedule
+celerybeat-schedule
