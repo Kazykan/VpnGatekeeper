@@ -1,11 +1,11 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Block, Button, List, ListItem, Preloader, Segmented, SegmentedButton } from "konsta/react"
-import { AnimatePresence, motion } from "framer-motion"
-import { useVpnConfig } from "../hooks/VpnConfigInline"
+import { motion } from "framer-motion"
+import { useUserStore } from "@/store/useUserStore"
 
 export function VpnConfigInline() {
-  const { configs, loading, status204, status404, fetchNewConfig } = useVpnConfig()
+  const { user, loading } = useUserStore()
   const [device, setDevice] = useState<"ios" | "android">("ios")
 
   useEffect(() => {
@@ -13,31 +13,40 @@ export function VpnConfigInline() {
     if (/android/.test(ua)) setDevice("android")
   }, [])
 
-  // Улучшенная функция копирования с отладкой
-  const copyToClipboard = (text: string | undefined, label: string) => {
-    console.log(`[DEBUG] Попытка копирования ${label}:`, text)
+  // 1. Проверка активности подписки с защитой от null/undefined
+  const isSubscriptionActive = useMemo(() => {
+    if (!user?.end_date) return false
 
-    if (!text || text.trim() === "") {
-      alert(`Ошибка: Данные для "${label}" отсутствуют в базе!`)
-      return
-    }
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
 
+    const endDate = new Date(user.end_date)
+    // Если дата невалидна (Invalid Date), вернется false
+    return !isNaN(endDate.getTime()) && endDate >= now
+  }, [user?.end_date])
+
+  // 2. Формирование ссылки с защитой
+  const subscriptionUrl = useMemo(() => {
+    if (!user?.sub_token) return ""
+    const baseUrl = process.env.NEXT_PUBLIC_DJANGO_API_URL || "https://api.yourdomain.com"
+    const cleanBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl
+    return `${cleanBaseUrl}/sub/${user.sub_token}/`
+  }, [user?.sub_token])
+
+  const copyToClipboard = (text: string, label: string) => {
+    if (!text) return
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard
-        .writeText(text)
-        .then(() => alert(`✅ ${label} скопирован!`))
-        .catch(() => alert("Ошибка при копировании"))
+      navigator.clipboard.writeText(text).then(() => alert(`✅ ${label} скопирована!`))
     } else {
-      // Резервный метод для некоторых мобильных браузеров
       const textArea = document.createElement("textarea")
       textArea.value = text
       document.body.appendChild(textArea)
       textArea.select()
       try {
         document.execCommand("copy")
-        alert(`✅ ${label} скопирован!`)
+        alert(`✅ ${label} скопирована!`)
       } catch (err) {
-        alert("Не удалось скопировать")
+        alert("Ошибка при копировании")
       }
       document.body.removeChild(textArea)
     }
@@ -45,50 +54,30 @@ export function VpnConfigInline() {
 
   if (loading)
     return (
-      <div className="flex flex-col items-center justify-center p-12 space-y-4">
-        <Preloader className="w-8 h-8" />
-        <span className="text-sm opacity-50">Загрузка ключей...</span>
+      <div className="flex justify-center p-12">
+        <Preloader />
       </div>
     )
 
-  // 404 — пользователь нет / нет конфигов вообще
-  if (status404)
+  // Показываем сообщение, если подписки нет или данные не загружены
+  if (!user || !isSubscriptionActive || !user.sub_token) {
     return (
-      <Block strong inset className="text-center opacity-60 text-sm">
-        У вас пока нет активных подключений. Купите подписку, чтобы получить конфиг.
-      </Block>
-    )
-
-  // 204 — есть только старые конфиги
-  if (status204)
-    return (
-      <Block strong inset className="text-center opacity-60 text-sm space-y-2">
-        <p>
-          У вас есть только старые конфиги. Старый конфиг перестанет работать после генерации
-          нового.
+      <Block strong inset className="text-center py-8">
+        <div className="text-4xl mb-4">📅</div>
+        <p className="opacity-60 text-sm">
+          У вас нет активной подписки или срок её действия истек.
+          <br />
+          Пожалуйста, оплатите тариф, чтобы получить доступ.
         </p>
-        <Button
-          raised
-          onClick={() => {
-            fetchNewConfig()
-          }}
-        >
-          Получить новый конфиг
-        </Button>
       </Block>
     )
+  }
 
-  // configs есть → показываем как сейчас
-  if (!configs || configs.length === 0)
-    return (
-      <Block strong inset className="text-center opacity-60 text-sm">
-        У вас пока нет активных подключений.
-      </Block>
-    )
+  // Для рендеринга даты используем безопасную переменную
+  const formattedDate = user.end_date ? new Date(user.end_date).toLocaleDateString() : ""
 
   return (
     <div className="space-y-4 pb-20">
-      {/* Выбор устройства */}
       <Block strong inset className="!mb-2">
         <Segmented raised>
           <SegmentedButton active={device === "ios"} onClick={() => setDevice("ios")}>
@@ -100,102 +89,86 @@ export function VpnConfigInline() {
         </Segmented>
       </Block>
 
-      {/* Инструкция */}
       <Block strong inset className="!my-2 border-l-4 border-primary bg-primary/5">
-        <div className="text-xs space-y-2">
-          <p>
-            <span className="font-bold">1. Установите:</span>{" "}
-            {device === "ios" ? (
-              <a
-                href="https://apps.apple.com/app/defaultvpn/id6472635449"
-                className="text-primary underline"
-              >
-                DefaultVPN
-              </a>
-            ) : (
-              <a
-                href="https://play.google.com/store/apps/details?id=org.amnezia.vpn"
-                className="text-primary underline"
-              >
-                Amnezia VPN
-              </a>
-            )}
-          </p>
-          <p>
-            <span className="font-bold">2. Скопируйте</span> конфиг кнопкой ниже.
-          </p>
-          <p>
-            <span className="font-bold">3. Откройте</span> приложение и нажмите{" "}
-            <span className="font-bold text-primary">+ (Добавить)</span>.
-          </p>
+        <div className="text-[13px] space-y-3">
+          <p className="font-bold text-sm text-primary">Инструкция по установке:</p>
+
+          {device === "ios" ? (
+            <div className="space-y-2">
+              <p>
+                1. Скачайте{" "}
+                <a
+                  href="https://apps.apple.com/tr/app/happ-proxy-utility/id6504287215"
+                  target="_blank"
+                  className="underline font-bold"
+                >
+                  Happ Proxy Utility
+                </a>{" "}
+                в App Store.
+              </p>
+              <p>
+                2. Нажмите кнопку <span className="font-bold">"Копировать"</span> ниже.
+              </p>
+              <p>
+                3. В приложении: <span className="font-bold text-primary">Settings</span> →{" "}
+                <span className="font-bold text-primary">Subscription</span> →{" "}
+                <span className="font-bold text-primary">"+"</span>.
+              </p>
+              <p>
+                4. Вставьте ссылку и нажмите <span className="font-bold">Done</span>.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p>
+                1. Установите{" "}
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.happproxy&pcampaignid=web_share"
+                  target="_blank"
+                  className="underline font-bold"
+                >
+                  Happ - Proxy Utility
+                </a>{" "}
+                из Google Play.
+              </p>
+              <p>
+                2. Нажмите кнопку <span className="font-bold">"Копировать"</span> ниже.
+              </p>
+              <p>
+                3. В приложении: <span className="font-bold text-primary">Меню</span> →{" "}
+                <span className="font-bold text-primary">Группы подписок</span> →{" "}
+                <span className="font-bold text-primary">"+"</span>.
+              </p>
+              <p>
+                4. Выберите <span className="font-bold text-primary">Импорт из буфера обмена</span>.
+              </p>
+            </div>
+          )}
         </div>
       </Block>
 
-      <AnimatePresence>
-        {configs.map((cred, idx) => (
-          <motion.div
-            key={cred.credential_id || idx}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-1"
-          >
-            <div className="px-5 text-[10px] uppercase text-gray-500 font-bold tracking-widest">
-              Подключение #{idx + 1}
-            </div>
-
-            <List strong inset className="!my-0">
-              {/* Основной - Швеция */}
-              <ListItem
-                title={<span className="text-sm font-bold">🇸🇪 Основной (Швеция)</span>}
-                subtitle="WireGuard • Лучшая скорость"
-                after={
-                  <Button
-                    small
-                    clear
-                    onClick={() =>
-                      copyToClipboard(cred.configs?.main_wg?.config_text, "Основной конфиг")
-                    }
-                  >
-                    Копия
-                  </Button>
-                }
-              />
-
-              {/* Резервный - Германия (VLESS) */}
-              <ListItem
-                title={<span className="text-sm font-bold">🇩🇪 Резервный (Германия)</span>}
-                subtitle="VLESS • Обход блокировок"
-                after={
-                  <Button
-                    small
-                    clear
-                    onClick={() => copyToClipboard(cred.configs?.vless?.link, "VLESS ссылку")}
-                  >
-                    Копия
-                  </Button>
-                }
-              />
-
-              {/* Whitelist */}
-              <ListItem
-                title={<span className="text-sm font-bold">🛡️ Только соцсети / Белые списки</span>}
-                subtitle="Экономия трафика"
-                after={
-                  <Button
-                    small
-                    clear
-                    onClick={() =>
-                      copyToClipboard(cred.configs?.whitelist_wg?.config_text, "Whitelist конфиг")
-                    }
-                  >
-                    Копия
-                  </Button>
-                }
-              />
-            </List>
-          </motion.div>
-        ))}
-      </AnimatePresence>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <List strong inset className="!my-0">
+          <ListItem
+            title={<span className="text-sm font-bold">Ваша VPN подписка</span>}
+            subtitle="Единая ссылка для подключения"
+            after={
+              <Button
+                small
+                raised
+                className="ml-2"
+                onClick={() => copyToClipboard(subscriptionUrl, "Ссылка подписки")}
+              >
+                Копировать
+              </Button>
+            }
+          />
+        </List>
+        <div className="px-6 py-2 flex justify-between items-center text-[10px] text-gray-400 uppercase tracking-wider">
+          <span>Статус: Активна</span>
+          <span>До: {formattedDate}</span>
+        </div>
+      </motion.div>
     </div>
   )
 }

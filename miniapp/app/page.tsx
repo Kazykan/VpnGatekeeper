@@ -20,7 +20,7 @@ import { RequireBotRegistration } from "./components/RequireBotRegistration"
 import { Payment } from "./components/Payment"
 import { Header } from "./components/Header"
 import { UserInfo } from "./components/UserInfo"
-import { Connect } from "./components/Connect"
+import { TrafficStats } from "./components/TrafficStats"
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("vpn")
@@ -128,32 +128,14 @@ export default function Home() {
             {/* Получить конфиг */}
 
             <VpnConfigInline />
-            <Block strong inset className="space-y-4">
-              <div className="flex justify-between items-center border-b border-gray-800 pb-2">
-                <span className="text-gray-400">Использовано трафика</span>
-                <span className="font-mono text-primary">12.4 GB</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-gray-800 pb-2">
-                <span className="text-gray-400">Дней в сети</span>
-                <span className="font-mono text-primary">24 дня</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Статус узла</span>
-                <span className="text-green-500 flex items-center gap-1">
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span> Online
-                </span>
-              </div>
-            </Block>
-            <Block className="text-sm text-gray-400 italic">
-              * Статистика обновляется раз в 15 минут
-            </Block>
+            <TrafficStats />
           </div>
         )}
         {activeTab === "settings" && (
           <div className="animate-fadeIn">
-            <Connect />
+
             <BlockTitle>Настройки приложения</BlockTitle>
-            
+
             {/* Блок с трафиком (статистика) */}
             <Block strong inset className="!my-2">
               <div className="flex justify-between items-end mb-1">

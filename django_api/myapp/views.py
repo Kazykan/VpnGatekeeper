@@ -1,6 +1,6 @@
 from typing import cast
 import logging
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.response import Response
@@ -285,7 +285,7 @@ def user_sub_link_view(request, token):
     )
 
     response["Subscription-Userinfo"] = user_info_header
-    response["Profile-Title"] = f"VPN-{user.name}"
+    response["Profile-Title"] = f"Rufat Connect"
     # Интервал обновления (в часах)
     response["Profile-Update-Interval"] = "6"
 

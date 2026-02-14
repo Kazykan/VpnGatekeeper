@@ -13,11 +13,11 @@ export function Header({ user, session }: { user: any; session: any }) {
           <Image
             src="/Rufat_logo.png"
             alt="Logo"
-            width={28}
-            height={28}
+            width={45}
+            height={45}
             className="rounded-lg shadow-sm"
           />
-          <span className="font-bold text-[17px] tracking-tight">Rufat VPN</span>
+          <span className="font-bold text-[17px] tracking-tight">Rufat Connect</span>
         </div>
       }
       // Аватар справа

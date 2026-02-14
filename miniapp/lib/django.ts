@@ -1,4 +1,5 @@
-import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios"
+import { User } from "@/app/types/user"
+import axios, { AxiosInstance } from "axios"
 
 type TokenPair = {
   access: string
@@ -143,7 +144,7 @@ class DjangoAPI {
 
   // --- Публичные методы API ---
 
-  async getUsersByTelegramId(telegramId: number) {
+  async getUsersByTelegramId(telegramId: number): Promise<User[]> {
     const res = await this.api.get(`/api/users/`, {
       params: { telegram_id: telegramId },
     })
@@ -187,6 +188,14 @@ class DjangoAPI {
       params: { telegram_id },
     })
 
+    return res.data
+  }
+
+  async getFullTrafficStats(telegramId: number) {
+    await this.ensureAuth() // Если эндпоинт требует IsAuthenticated
+    const res = await this.api.get(`/api/users/full-stats/`, {
+      params: { telegram_id: telegramId },
+    })
     return res.data
   }
 }

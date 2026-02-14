@@ -1,3 +1,4 @@
+// store/useSessionStore.ts
 import { create } from "zustand"
 
 interface SessionState {

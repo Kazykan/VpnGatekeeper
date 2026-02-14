@@ -37,10 +37,12 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "django_filters",
+    "corsheaders",
     "myapp",
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",  # Должно быть в самом верху!
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -177,3 +179,21 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute="*/15"),  # Раз в 15 минут
     },
 }
+
+# Получаем строку из переменной окружения
+cors_raw = os.getenv("DJANGO_CORS_ALLOWED_ORIGINS", "")
+
+# Парсим: убираем пробелы и создаем список, если строка не пустая
+if cors_raw:
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip() for origin in cors_raw.split(",") if origin.strip()
+    ]
+else:
+    CORS_ALLOWED_ORIGINS = []
+
+# Не забудь про заголовки, иначе фронтенд не увидит трафик!
+CORS_EXPOSE_HEADERS = [
+    "Subscription-Userinfo",
+    "Profile-Title",
+    "Profile-Update-Interval",
+]
