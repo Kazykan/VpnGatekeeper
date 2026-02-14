@@ -178,6 +178,10 @@ CELERY_BEAT_SCHEDULE = {
         # "schedule": crontab(minute="*"),  # Раз в минут
         "schedule": crontab(minute="*/15"),  # Раз в 15 минут
     },
+    "nightly-db-backup": {
+        "task": "myapp.tasks.backup.create_db_backup",
+        "schedule": crontab(hour=23, minute=42),  # В 3 часа ночи
+    },
 }
 
 # Получаем строку из переменной окружения

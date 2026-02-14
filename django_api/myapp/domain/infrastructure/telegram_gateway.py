@@ -1,3 +1,4 @@
+# myapp/domain/infrastructure/telegram_gateway.py
 from django.conf import settings
 import requests
 import logging

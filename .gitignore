@@ -9,3 +9,5 @@ test.db
 django_api/logs
 django_api/database.db
 celerybeat-schedule
+backups_data/
+backups/

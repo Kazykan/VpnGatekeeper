@@ -26,6 +26,8 @@ services:
       - ./django_api:/app
       - django_static:/app/static # Добавляем это
       - django_media:/app/media # И это (для картинок)
+      - ./backups_data:/app/backups # Теперь бэкапы будут в папке backups_data на сервере
+      - ./.env:/app/.env:ro  # Прокидываем файл только для чтения (read-only)
     ports:
       - "${DJANGO_PORT:-8000}:8000"
     depends_on:
@@ -46,12 +48,15 @@ services:
       - YOOKASSA_API_KEY=${YOOKASSA_API_KEY}
       - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
 
+
   celery_worker:
     build: ./django_api
     container_name: celery_worker
     command: celery -A backend worker --loglevel=info
     volumes:
       - ./django_api:/app
+      - ./backups_data:/app/backups
+      - ./.env:/app/.env:ro  # Прокидываем файл только для чтения (read-only)
     depends_on:
       - django
       - redis
