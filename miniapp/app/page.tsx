@@ -4,31 +4,23 @@ import React, { useState } from "react"
 import { useUserStore } from "@/store/useUserStore"
 import { VpnConfigInline } from "./components/VpnConfigInline"
 import { GlobeLock, Settings, Unplug } from "lucide-react"
-import {
-  Page,
-  Block,
-  Tabbar,
-  TabbarLink,
-  Icon,
-  List,
-  ListItem,
-  Toggle,
-  BlockTitle,
-  Button,
-} from "konsta/react"
+import { Page, Block, Tabbar, TabbarLink, List, ListItem, Toggle, BlockTitle } from "konsta/react"
 import { useSessionStore } from "@/store/useSessionStore"
 import { RequireBotRegistration } from "./components/RequireBotRegistration"
-import { Payment } from "./components/Payment"
 import { Header } from "./components/Header"
 import { UserInfo } from "./components/UserInfo"
 import { TrafficStats } from "./components/TrafficStats"
 import { ReferralCard } from "./components/ReferralCard"
+import { SubscriptionStatus } from "./components/SubscriptionStatus"
+import { ConnectAction } from "./components/ConnectAction"
+import { SettingsView } from "./components/SettingsView"
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("vpn")
   const { user, loading, error } = useUserStore()
   const session = useSessionStore((s) => s.session)
 
+  // Обработка состояний загрузки и ошибок
   if (loading) {
     return (
       <Page className="flex items-center justify-center">
@@ -41,88 +33,31 @@ export default function Home() {
   }
 
   if (error === "NOT_REGISTERED") return <RequireBotRegistration />
-  if (!user)
+
+  if (!user) {
     return (
       <Page>
-        <Block>Ошибка: {error}</Block>
+        <Block>Ошибка: {error || "Пользователь не найден"}</Block>
       </Page>
     )
-
-  // Рассчитываем остаток дней
-  const now = new Date()
-  const endDate = user.end_date ? new Date(user.end_date) : null
-  const daysLeft = endDate
-    ? Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    : 0
-
-  const isSubscriptionActive = daysLeft > 0
-
-  // Дата автосписания (за 2 дня до окончания)
-  const autopayDate = endDate ? new Date(endDate.getTime() - 2 * 24 * 60 * 60 * 1000) : null
+  }
 
   return (
     <Page>
       <Header user={user} session={session} />
 
-      {/* Контент в зависимости от активного таба */}
+      {/* Основной контент */}
       <div className="pb-24">
-        {" "}
-        {/* Отступ для таббара */}
+        {/* ТАБ: VPN (ГЛАВНАЯ) */}
         {activeTab === "vpn" && (
           <div className="animate-fadeIn space-y-4">
             <UserInfo user={user} />
 
-            {isSubscriptionActive ? (
-              <>
-                <Block strong inset className="!my-2 border-l-4 border-primary bg-primary/5">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider">
-                        Подписка активна
-                      </p>
-                      <p className="text-xl font-bold">Осталось: {daysLeft} дн.</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] text-gray-500 uppercase">
-                        До {endDate?.toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
+            {/* Вся логика дней, дат и кнопок оплаты теперь внутри этого компонента */}
+            <SubscriptionStatus user={user} />
+            <ConnectAction onClick={() => setActiveTab("stats")} />
 
-                  {user.autopay_enabled && autopayDate && (
-                    <div className="mt-4 p-2 bg-black/20 rounded-lg flex items-center gap-2">
-                      <span className="text-lg">💳</span>
-                      <div className="text-[11px] leading-tight text-gray-300">
-                        Автопродление включено. Списание произойдет <br />
-                        <span className="text-primary font-semibold">
-                          {autopayDate.toLocaleDateString()}
-                        </span>{" "}
-                        (за 2 дня до конца)
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Если дней осталось мало, а автооплаты нет — можно все же показать кнопку продления */}
-                  {!user.autopay_enabled && daysLeft <= 5 && (
-                    <div className="mt-4">
-                      <p className="text-[11px] text-orange-400 mb-2">
-                        Советуем продлить заранее, чтобы не потерять доступ
-                      </p>
-                      <Payment /> {/* Можно сделать Payment компактным через пропсы */}
-                    </div>
-                  )}
-                </Block>
-                {/* РЕФЕРАЛКА ПРИ АКТИВНОЙ ПОДПИСКЕ */}
-                <ReferralCard />
-              </>
-            ) : (
-              <>
-                {/* СНАЧАЛА ОПЛАТА, ЕСЛИ ПОДПИСКА ИСТЕКЛА */}
-                <Payment />
-                {/* РЕФЕРАЛКА ПОД ОПЛАТОЙ */}
-                <ReferralCard />
-              </>
-            )}
+            <ReferralCard />
 
             <Block
               strong
@@ -133,34 +68,18 @@ export default function Home() {
             </Block>
           </div>
         )}
+
+        {/* ТАБ: ПОДКЛЮЧЕНИЕ (СТАТИСТИКА) */}
         {activeTab === "stats" && (
           <div className="animate-fadeIn">
             <BlockTitle>Подключение</BlockTitle>
-            {/* Получить конфиг */}
-
             <VpnConfigInline />
             <TrafficStats />
           </div>
         )}
-        {activeTab === "settings" && (
-          <div className="animate-fadeIn">
-            <BlockTitle>Настройки приложения</BlockTitle>
 
-            <List strong inset>
-              <ListItem title="Уведомления" after={<Toggle defaultChecked color="green" />} />
-              <ListItem
-                title="Smart Mode"
-                subtitle="Автоматический выбор сервера"
-                after={<Toggle />}
-              />
-            </List>
-            <List strong inset>
-              <ListItem title="Язык" after="Русский" link />
-              <ListItem title="Помощь и поддержка" link />
-              <ListItem title="Версия ПО" after="2.1.0" />
-            </List>
-          </div>
-        )}
+        {/* ТАБ: НАСТРОЙКИ */}
+        {activeTab === "settings" && <SettingsView user={user} />}
       </div>
 
       {/* Таббар фиксированный снизу */}
@@ -168,31 +87,19 @@ export default function Home() {
         <TabbarLink
           active={activeTab === "vpn"}
           onClick={() => setActiveTab("vpn")}
-          icon={
-            <span className="text-2xl">
-              <GlobeLock />
-            </span>
-          }
+          icon={<GlobeLock />}
           label="Главная"
         />
         <TabbarLink
           active={activeTab === "stats"}
           onClick={() => setActiveTab("stats")}
-          icon={
-            <span className="text-2xl">
-              <Unplug />
-            </span>
-          }
+          icon={<Unplug />}
           label="Подключение"
         />
         <TabbarLink
           active={activeTab === "settings"}
           onClick={() => setActiveTab("settings")}
-          icon={
-            <span className="text-2xl">
-              <Settings />
-            </span>
-          }
+          icon={<Settings />}
           label="Настройки"
         />
       </Tabbar>

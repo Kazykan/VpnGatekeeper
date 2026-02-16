@@ -7,6 +7,11 @@ from django.utils import timezone
 class TelegramUser(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
+    is_gift = models.BooleanField(
+        default=False,
+        verbose_name="Подарочная подписка",
+        help_text="Если True, пользователь считается родственником/другом, подписка бесплатная",
+    )
     # Уникальный токен для получения ссылки подписки
     sub_token = models.UUIDField(default=uuid.uuid4, unique=True)
     telegram_id = models.BigIntegerField(unique=True)
@@ -115,8 +120,6 @@ class Credential(models.Model):
     wg_conf_enpoint = models.TextField(
         blank=True, null=True
     )  # Endpoint подключения из конфига
-    wg_conf = models.TextField(blank=True, null=True)  # готовый .conf
-    wg_conf_ip = models.TextField(blank=True, null=True)  # IP из конфига для блокировки
     wg_conf_old_server = models.BooleanField(
         default=False
     )  # флаг, что конфиг с "старого" сервера (для блокировки/разблокировки)

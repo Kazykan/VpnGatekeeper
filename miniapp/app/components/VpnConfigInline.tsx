@@ -101,7 +101,7 @@ export function VpnConfigInline() {
               <p>
                 1. Скачайте{" "}
                 <a
-                  href="https://apps.apple.com/tr/app/happ-proxy-utility/id6504287215"
+                  href="https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973"
                   target="_blank"
                   className="underline font-bold"
                 >

@@ -1,11 +1,13 @@
-from datetime import date, datetime
-import sqlite3
+from datetime import date
 from django.urls import path
 from django.contrib import messages
 from django.contrib import admin
 from django.shortcuts import render, redirect
 from django.utils.html import format_html
 
+from myapp.admin_actions import sync_vpn_user_action
+from myapp.domain.infrastructure.legacy_importer import import_from_old_db
+from myapp.tasks.broadcast import send_mass_message_task
 from myapp.tasks.provisioning import mass_sync_xray_credentials
 from myapp.domain.credentials.exceptions import NoActiveSubscription
 from myapp.domain.credentials.services import generate_new_config_for_user
@@ -51,9 +53,59 @@ class CredentialAdmin(admin.ModelAdmin):
 
 @admin.register(TelegramUser)
 class TelegramUserAdmin(admin.ModelAdmin):
-    list_display = ("telegram_id", "name", "end_date")
+    list_display = ("telegram_id", "name", "end_date", "is_gift")
     change_list_template = "admin/telegramuser_changelist.html"
-    readonly_fields = ("generate_new_config_button",)  # добавляем поле в форму
+    readonly_fields = (
+        "sync_config_button_field",
+        "generate_new_config_button",
+    )  # добавляем поле в форму
+    actions = ["send_mass_message"]  # Регистрируем действие
+
+    @admin.display(description="VPN")
+    def sync_action_link(self, obj):
+        return format_html(
+            '<a class="button" href="./{}/sync-vpn/">🔄 Sync</a>', obj.id
+        )
+
+    @admin.display(description="Действие")
+    def sync_config_button_field(self, obj):
+        if not obj.pk:
+            return ""
+        return format_html(
+            '<a class="button" style="background-color: #447e9b; color: white;" '
+            'href="/admin/myapp/telegramuser/{}/sync-vpn/">Обновить данные на серверах</a>',
+            obj.id,
+        )
+
+    @admin.action(description="✉️ Рассылка сообщений")
+    def send_mass_message(self, request, queryset):
+        # 1. Если форма подтверждена (нажали кнопку "Запустить")
+        if "confirm" in request.POST:
+            message_text = request.POST.get("message_text")
+
+            if not message_text:
+                self.message_user(
+                    request, "Ошибка: текст сообщения пуст", messages.ERROR
+                )
+                return
+
+            # Получаем список ID из кверисета
+            user_ids = list(queryset.values_list("id", flat=True))
+
+            # Запускаем фоновую задачу Celery
+            send_mass_message_task.delay(user_ids, message_text)  # type: ignore
+
+            self.message_user(
+                request, f"Рассылка для {len(user_ids)} пользователей запущена в фоне."
+            )
+            return redirect(request.get_full_path())
+
+        # 2. Если действие только выбрано из списка, показываем промежуточную страницу
+        return render(
+            request,
+            "admin/telegramuser/broadcast_confirmation.html",  # Путь относительно папки templates
+            context={"queryset": queryset},
+        )
 
     def get_urls(self):
         urls = super().get_urls()
@@ -64,6 +116,11 @@ class TelegramUserAdmin(admin.ModelAdmin):
                 name="import_legacy_users",
             ),
             path(
+                "<int:user_id>/sync-vpn/",
+                self.admin_site.admin_view(self.sync_vpn_handler),
+                name="telegramuser-sync-vpn",
+            ),
+            path(
                 "<int:user_id>/generate-new-config/",
                 self.admin_site.admin_view(self.generate_new_config),
                 name="telegramuser-generate-new-config",
@@ -71,14 +128,18 @@ class TelegramUserAdmin(admin.ModelAdmin):
         ]
         return custom_urls + urls
 
-    @admin.display(description="Действие")
+    @admin.display(description="Перевыпуск конфигурации")
     def generate_new_config_button(self, obj):
         if not obj.id:
             return ""
 
         if obj.end_date and obj.end_date >= date.today():
             return format_html(
-                '<a class="button" href="{}">Создать новый конфиг</a>',
+                '<a class="button" style="margin-bottom: 5px;" href="{}">Создать новый конфиг</a>'
+                '<br><br><small style="color: #666; display: block; line-height: 1.2; max-width: 250px;">'
+                "⚠️ <b>Внимание:</b> удалит текущий конфиг Amnezia WG "
+                "и создаст новый на VLESS серверах."
+                "</small>",
                 f"/admin/myapp/telegramuser/{obj.id}/generate-new-config/",
             )
 
@@ -107,95 +168,16 @@ class TelegramUserAdmin(admin.ModelAdmin):
         if request.method == "POST":
             form = ImportLegacyUsersForm(request.POST)
             if form.is_valid():
-                active_after = form.cleaned_data["active_after"]
-
-                imported = self._import_from_old_db(active_after)
-
+                count = import_from_old_db(form.cleaned_data["active_after"])
                 self.message_user(
-                    request,
-                    f"Импортировано пользователей: {imported}",
+                    request, f"Успешно импортировано: {count} пользователей"
                 )
                 return redirect("..")
         else:
             form = ImportLegacyUsersForm()
+        return render(request, "admin/import_legacy_users.html", {"form": form})
 
-        return render(
-            request,
-            "admin/import_legacy_users.html",
-            {"form": form},
-        )
-
-    def _import_from_old_db(self, active_after):
-        OLD_DB_PATH = "/app/database.db"
-        conn = sqlite3.connect(OLD_DB_PATH)
-        cursor = conn.cursor()
-
-        # 1. LEFT JOIN позволяет взять всех пользователей, даже если у них нет конфига (ip будет None)
-        cursor.execute(
-            """
-                SELECT
-                    u.telegram_id,
-                    u.name,
-                    u.end_date,
-                    c.address
-                FROM users u
-                LEFT JOIN configs c ON c.user_id = u.user_id
-                WHERE u.is_unlimited = 0
-                """
-        )
-
-        try:
-            old_server = Server.objects.get(name__icontains="Old_server")
-        except Server.DoesNotExist:
-            old_server = None
-
-        imported_count = 0
-
-        for telegram_id, name, end_date_str, ip in cursor.fetchall():
-            # Обработка даты
-            current_end_date = None
-            if end_date_str:
-                try:
-                    current_end_date = datetime.strptime(
-                        end_date_str, "%Y-%m-%d"
-                    ).date()
-                except Exception:
-                    current_end_date = None
-
-            # ЛОГИКА ФИЛЬТРАЦИИ:
-            # Если дата есть и она больше или равна active_after — это активный юзер
-            is_active = current_end_date and current_end_date >= active_after
-
-            # 2. Создаем или обновляем пользователя
-            # Если юзер не активный по фильтру, записываем ему end_date = None (или оставляем старую, если хотите)
-            target_date = current_end_date if is_active else None
-
-            user, created = TelegramUser.objects.get_or_create(
-                telegram_id=int(telegram_id),
-                defaults={
-                    "name": name or f"user_{telegram_id}",
-                    "end_date": target_date,
-                },
-            )
-
-            if not created:
-                user.end_date = target_date
-                user.save()
-
-            # 3. Привязываем к серверу ТОЛЬКО активных пользователей, у которых есть IP
-            if is_active and ip and old_server:
-                Credential.objects.get_or_create(
-                    user=user,
-                    server=old_server,
-                    defaults={
-                        "wg_conf_ip": ip,
-                        "wg_conf_old_server": True,
-                    },
-                )
-            # Если юзер не активен, мы НЕ создаем Credential,
-            # и он остается в БД просто как "клиент" без доступа.
-
-            imported_count += 1
-
-        conn.close()
-        return imported_count
+    def sync_vpn_handler(self, request, user_id):
+        user = self.get_object(request, user_id)
+        # Вызываем логику из отдельного файла
+        return sync_vpn_user_action(self, request, user)

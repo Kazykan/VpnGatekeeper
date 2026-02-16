@@ -1,8 +1,8 @@
 # myapp/tasks/billing.py
 from celery import shared_task
 from datetime import date, timedelta
-from backend import settings
-from myapp.models import Payment, TelegramUser
+from myapp.domain.user_service import calculate_new_end_date
+from myapp.models import Payment, TelegramUser, Credential
 from myapp.domain.subscription.services import process_autopayment_for_user
 from myapp.domain.infrastructure.telegram_gateway import (
     send_message,
@@ -16,29 +16,69 @@ from django.utils import timezone
 def daily_billing_check():
     today = date.today()
 
-    # 1. Уведомление ЗА 3 ДНЯ
-    # Если end_date = 2026-02-03, а сегодня 2026-01-31, то разница 3 дня.
+    # --- 1. БЕСПЛАТНОЕ ПРОДЛЕНИЕ ДЛЯ РОДСТВЕННИКОВ (is_gift=True) ---
+    # Продлеваем за 2 дня до окончания, чтобы у них не было даже секундного прерывания
+    gift_renewal_target = today + timedelta(days=2)
+    gift_users = TelegramUser.objects.filter(is_gift=True, end_date=gift_renewal_target)
+
+    for user in gift_users:
+        # Используем вашу функцию для расчета +1 месяц +1 день
+        user.end_date = calculate_new_end_date(user.end_date, 1)
+        user.save()
+
+        # Запускаем синхронизацию, которая обновит expiry_ts в 3x-ui
+        from myapp.tasks.provisioning import sync_vpn_cluster
+
+        sync_vpn_cluster.delay(user.telegram_id)  # type: ignore
+
+        # Уведомляем
+        text = (
+            f"🎁 <b>Хорошие новости!</b>\n\n"
+            f"Руфат продлил вашу подписку еще на месяц.\n"
+            f"Доступ активен до: <b>{user.end_date}</b>\n\n"
+            f"Пользуйтесь с удовольствием! 🚀"
+        )
+        send_message(user.telegram_id, text)
+
+    # --- 2. АВТОПЛАТЕЖИ (is_gift=False) ---
+    # Уведомление за 3 дня
     notification_target = today + timedelta(days=3)
     users_to_notify = TelegramUser.objects.filter(
-        end_date=notification_target, autopay_enabled=True
+        end_date=notification_target, autopay_enabled=True, is_gift=False
     )
-
     for user in users_to_notify:
         send_message(
             user.telegram_id,
-            "🔔 Напоминание: Через 2 дня ваша подписка будет продлена автоматически.",
+            "🔔 Напоминание: Через 3 дня ваша подписка будет продлена автоматически.",
         )
 
-    # 2. Списание ЗА 2 ДНЯ
+    # Списание за 2 дня
     charge_target = today + timedelta(days=2)
     users_to_charge = TelegramUser.objects.filter(
-        end_date=charge_target, autopay_enabled=True, payment_method_id__isnull=False
+        end_date=charge_target,
+        autopay_enabled=True,
+        payment_method_id__isnull=False,
+        is_gift=False,
     )
-
     for user in users_to_charge:
-        # Запускаем процесс списания асинхронно для каждого пользователя
-        # Чтобы ошибка у одного не остановила очередь для остальных
+        from myapp.tasks.billing import run_single_autopay
+
         run_single_autopay.delay(user.id)  # type: ignore
+
+    # --- 3. УВЕДОМЛЕНИЯ О РУЧНОЙ ОПЛАТЕ ---
+    # Для тех, у кого нет автоплатежа и кто не "подарочный"
+    for days_left in [10, 5, 2]:
+        target_date = today + timedelta(days=days_left)
+        users_manual = TelegramUser.objects.filter(
+            end_date=target_date, autopay_enabled=False, is_gift=False
+        )
+        for user in users_manual:
+            day_word = "дней" if days_left in [10, 5] else "дня"
+            send_message(
+                user.telegram_id,
+                f"⚠️ Ваша подписка истекает через {days_left} {day_word}.\n"
+                f"Пожалуйста, продлите её вручную в боте, чтобы не потерять доступ.",
+            )
 
 
 @shared_task

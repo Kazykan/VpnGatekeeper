@@ -16,6 +16,7 @@ app.conf.imports = [
     "myapp.tasks.check_payment",
     "myapp.tasks.provisioning",
     "myapp.tasks.backup",
+    "myapp.tasks.broadcast",
 ]
 
 app.autodiscover_tasks()

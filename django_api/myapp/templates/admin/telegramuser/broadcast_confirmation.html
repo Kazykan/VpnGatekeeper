@@ -1,0 +1,53 @@
+{% extends "admin/base_site.html" %} {% block content %}
+<div class="card">
+  <div class="card-body">
+    <h3>Массовая рассылка</h3>
+    <p>Вы выбрали <strong>{{ queryset|length }}</strong> пользователей для отправки сообщения.</p>
+
+    <form action="" method="post">
+      {% csrf_token %}
+
+      <div style="margin-bottom: 15px">
+        <label for="msg_text">Текст сообщения (HTML поддерживается):</label><br />
+        <textarea
+          id="msg_text"
+          name="message_text"
+          rows="10"
+          style="width: 100%; max-width: 800px; padding: 10px"
+          required
+          placeholder="Привет! Ваша подписка..."
+        ></textarea>
+      </div>
+
+      {% for obj in queryset %}
+      <input type="hidden" name="_selected_action" value="{{ obj.pk }}" />
+      {% endfor %}
+
+      <input type="hidden" name="action" value="send_mass_message" />
+      <input type="hidden" name="confirm" value="yes" />
+
+      <div class="submit-row">
+        <input
+          type="submit"
+          value="🚀 Запустить рассылку"
+          class="default"
+          style="
+            background: #417690;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+          "
+        />
+        <a
+          href="#"
+          onclick="window.history.back()"
+          class="button cancel-link"
+          style="margin-left: 10px"
+          >Отмена</a
+        >
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
