@@ -1,7 +1,7 @@
 # myapp/domain/credentials/services.py
-from datetime import date
+from datetime import date, timedelta
 import logging
-import json
+from django.utils import timezone
 from urllib.parse import urlencode, urlparse
 from myapp.models import TelegramUser, Credential, Server
 from myapp.domain.credentials.exceptions import NoActiveSubscription
@@ -177,25 +177,26 @@ def update_credential_statistics(credential: Credential, up: int, down: int):
     """
     Бизнес-логика обновления статистики с защитой от сброса сервера.
     """
+
+    old_total = credential.total_traff or 0
     current_total = up + down
 
-    # Проверка на случайный сброс (рестарт) сервера 3x-ui
-    if current_total < credential.total_traff:
-        # Сервер сбросил счетчики. Чтобы не ломать статистику,
-        # мы тоже сбрасываем локальный счетчик и offset.
+    # Проверка на сброс счетчиков на сервере
+    if current_total < old_total:
         credential.total_traff = 0
         credential.up_traff = 0
         credential.down_traff = 0
         credential.traffic_offset = 0
+        old_total = 0  # важно обновить old_total
 
-    # Обновляем основные показатели
+    # Если трафик увеличился — фиксируем активность
+    if current_total > old_total:
+        credential.last_seen = timezone.now()
+
+    # Обновляем значения
     credential.up_traff = up
     credential.down_traff = down
     credential.total_traff = current_total
-
-    # Фиксируем активность, если трафик изменился
-    if current_total > (credential.total_traff or 0):
-        credential.last_seen = datetime.now()
 
     credential.save()
 
@@ -216,6 +217,10 @@ def sync_server_traffic(server: Server):
     # Получаем данные из панели
     stats_from_panel = gateway.get_all_clients_stats()
 
+    active_count = 0 
+    now = timezone.now()
+    activity_threshold = now - timedelta(minutes=20)
+
     logger.info(f"--- Syncing server {server.name} ---")
     logger.info(f"Found {len(stats_from_panel)} client stats in 3x-ui")
 
@@ -231,3 +236,15 @@ def sync_server_traffic(server: Server):
             update_credential_statistics(
                 credential=credential, up=stat.up, down=stat.down
             )
+            # Считаем пользователя активным, если он "светился" в базе недавно
+            # (last_seen обновился внутри update_credential_statistics)
+            if credential.last_seen and credential.last_seen >= activity_threshold:
+                active_count += 1
+                
+    # Считаем нагрузку (с учетом твоих полей веса и лимитов)
+    # Формула: (активные / лимит) / вес
+    # Если вес 2.0, нагрузка будет в 2 раза меньше (сервер "сильнее")
+    load = (active_count / server.max_clients) / server.base_weight
+    
+    server.current_load = round(min(load, 1.0), 3)
+    server.save(update_fields=['current_load'])

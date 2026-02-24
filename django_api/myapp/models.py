@@ -166,6 +166,15 @@ class Server(models.Model):
         help_text="ID инбаунда для 3x-ui (только для серверов типа xray)",
     )
 
+    base_weight = models.FloatField(
+        default=1.0,
+        verbose_name="Вес сервера",
+        help_text="Используется для балансировки нагрузки",
+    )
+    max_clients = models.IntegerField(default=1000)
+
+    current_load = models.FloatField(default=0.0, verbose_name="Текущая нагрузка")
+
     # --- ЛОГИКА РЕЛЕЯ (ПРОКЛАДКИ) ---
     is_relay = models.BooleanField(
         default=False,

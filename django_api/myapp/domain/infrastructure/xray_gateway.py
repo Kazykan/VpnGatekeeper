@@ -1,3 +1,4 @@
+# myapp/domain/infrastructure/xray_gateway.py
 import logging
 from py3xui import Api, Client
 from myapp.domain.infrastructure.telegram_gateway import send_message_to_admin_chanel
