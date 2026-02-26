@@ -107,12 +107,38 @@ def process_autopayment_for_user(user_id):
             metadata=metadata,
         )
 
+        # ОБЯЗАТЕЛЬНО сохраняем ID от ЮKassa сразу
+        new_payment.provider_payment_id = yk_res.id
+        new_payment.save()
+
         # Если ЮKassa сразу вернула успех (так часто бывает при рекуррентных)
         if yk_res.status == "succeeded":
             # Мы не вызываем продление тут, так как оно придет через Webhook
             # Но если вы хотите супер-надежности, можно вызвать и здесь.
             # Безопаснее дождаться вебхука, как и при обычной оплате.
             pass
+
+        elif yk_res.status == "canceled":
+            new_payment.status = "failed"
+            new_payment.save()
+
+            # 1. Уведомляем пользователя
+            user_msg = (
+                "⚠️ <b>Автопродление не удалось</b>\n\n"
+                "К сожалению, нам не удалось списать средства с вашей карты. "
+                "Проверьте баланс или срок действия карты.\n\n"
+                "Чтобы интернет не отключился, пожалуйста, <b>продлите подписку вручную</b> в боте."
+            )
+            send_message(user.telegram_id, user_msg)
+
+            # 2. Уведомляем админа (тебя)
+            admin_msg = (
+                f"Ошибка автосписания!\n"
+                f"Юзер: {user.telegram_id} (@{user.name})\n"
+                f"Сумма: {new_payment.amount} руб.\n"
+                f"ID платежа: {new_payment.id}"
+            )
+            send_message_to_admin_chanel(admin_msg, is_error=True)
 
     except Exception as e:
         print(f"Autopayment failed for user {user_id}: {e}")

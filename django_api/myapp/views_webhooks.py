@@ -57,14 +57,8 @@ class YooKassaWebhookView(APIView):
                 user.telegram_id, "🔄 Подписка успешно продлена автоматически."
             )
         else:
-            # Если это РУЧНОЙ платеж
-            if user.autopay_enabled:
-                user.autopay_enabled = False
-                # user.payment_method_id = None # Оставляем ID, чтобы юзер мог включить обратно без ввода карты
-                user.save()
-                send_message(
-                    user.telegram_id, "ℹ️ Вы оплатили вручную. Автосписание отключено."
-                )
+            # Если это РУЧНОЙ платеж автоплатеж мы не отключаем
+            # Если нужно отключить автоплатеж пользователь сделает это сам в настройках
 
             # Стандартные уведомления для ручной оплаты
             send_message(user.telegram_id, "✅ Оплата прошла. Подписка активирована.")
