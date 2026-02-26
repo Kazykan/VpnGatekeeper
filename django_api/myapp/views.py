@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
+from myapp.domain.subscription.load_balancer import get_balanced_credentials
 from myapp.domain.subscription.calculations import prepare_subscription_data
 from myapp.domain.credentials.selectors import (
     get_active_credentials_for_user,
@@ -30,6 +31,7 @@ from .serializers import (
     ServerSerializer,
 )
 
+NEXT_PUBLIC_TELEGRAM_BOT_URL = settings.NEXT_PUBLIC_TELEGRAM_BOT_URL
 logger = logging.getLogger(__name__)
 
 
@@ -267,10 +269,17 @@ def user_sub_link_view(request, token):
     """
     # 1. Selector
     user = get_object_or_404(TelegramUser, sub_token=token)
-    credentials = get_active_credentials_for_user(user)
 
-    # 2. Domain Logic
-    sub_data = prepare_subscription_data(user, credentials)
+    # 2. Получаем его ключи СРАЗУ с данными серверов (одним запросом)
+    # Это критически важно для производительности!
+
+    credentials_list = list(get_active_credentials_for_user(user))
+
+    # 3. Сортируем с помощью нашего балансировщика
+    balanced_creds = get_balanced_credentials(user, credentials_list)
+
+    # 4. Формируем конфиги (теперь они уже в правильном порядке)
+    sub_data = prepare_subscription_data(user, balanced_creds)
 
     # 3. Formating Response
     content = "\n".join(sub_data.links)
@@ -284,9 +293,11 @@ def user_sub_link_view(request, token):
         f"expire={sub_data.expire_timestamp}"
     )
 
+    # Ссылка на бота/личный кабинет
+    response["Profile-Web-Page-Url"] = NEXT_PUBLIC_TELEGRAM_BOT_URL  # ЗАМЕНИ НА СВОЕГО
     response["Subscription-Userinfo"] = user_info_header
-    response["Profile-Title"] = f"Rufat Connect"
+    response["Profile-Title"] = f"Rufat Connect tg_{user.telegram_id}"
     # Интервал обновления (в часах)
-    response["Profile-Update-Interval"] = "6"
+    response["Profile-Update-Interval"] = "7"
 
     return response
