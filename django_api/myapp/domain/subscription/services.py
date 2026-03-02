@@ -24,6 +24,7 @@ def extend_subscription_task(user_id, months):
 
     inviter_to_notify = None
     target_user_tg_id = None
+    inviter_tg_id = None
 
     # 1. Атомарно обновляем данные в БД
     with transaction.atomic():
@@ -41,6 +42,7 @@ def extend_subscription_task(user_id, months):
 
         if inviter:
             inviter.save()
+            inviter_tg_id = inviter.telegram_id  # Запоминаем ID инвайтера
             inviter_to_notify = {
                 "tg_id": inviter.telegram_id,
                 "inviter_name": inviter.name,
@@ -63,6 +65,10 @@ def extend_subscription_task(user_id, months):
     if target_user_tg_id:
         print(f"Triggering sync_vpn_cluster for {target_user_tg_id}", flush=True)
         sync_vpn_cluster.delay(target_user_tg_id)  # type: ignore
+
+    if inviter_tg_id:
+        print(f"Triggering sync_vpn_cluster for inviter {inviter_tg_id}", flush=True)
+        sync_vpn_cluster.delay(inviter_tg_id)  # type: ignore
 
 
 def process_autopayment_for_user(user_id):
