@@ -167,6 +167,32 @@ class CreatePaymentView(APIView):
         )
 
 
+class UnbindCardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        telegram_id = request.data.get("telegram_id")
+
+        if not telegram_id:
+            return Response({"error": "telegram_id is required"}, status=400)
+
+        try:
+            user = TelegramUser.objects.get(telegram_id=telegram_id)
+
+            # Самая важная часть для ЮKassa: стираем токен и выключаем флаг
+            user.payment_method_id = None
+            user.autopay_enabled = False
+            user.save()
+
+            return Response(
+                {"message": "Карта успешно отвязана", "autopay_enabled": False},
+                status=200,
+            )
+
+        except TelegramUser.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+
 class CredentialViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 

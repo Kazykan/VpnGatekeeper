@@ -27,6 +27,11 @@ class YooKassaWebhookView(APIView):
         saved = payment_method.get("saved", False)
         pm_id = payment_method.get("id")
 
+        # ДОБАВЛЯЕМ: Извлекаем последние 4 цифры
+        # Структура в ЮKassa: object.payment_method.card.last4
+        card_data = payment_method.get("card", {})
+        last4 = card_data.get("last4")
+
         # Поиск платежа
         payment = None
         if provider_id:
@@ -43,6 +48,10 @@ class YooKassaWebhookView(APIView):
         payment.save()
 
         user = payment.user
+
+        if last4:
+            user.card_last4 = last4
+            user.save()
 
         # Считаем количество успешных платежей пользователя
         # Если это ПЕРВЫЙ успех — значит перед нами новый клиент
@@ -67,7 +76,8 @@ class YooKassaWebhookView(APIView):
                 user.autopay_enabled = True  # Если поставил галочку — включаем
                 user.save()
                 send_message(
-                    user.telegram_id, "💳 Карта сохранена — автопродление включено."
+                    user.telegram_id,
+                    f"💳 Карта **** {last4} сохранена — автопродление включено.",
                 )
             elif not saved:
                 send_message(

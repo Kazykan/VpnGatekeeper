@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import {
   Segmented,
   SegmentedButton,
@@ -22,9 +22,26 @@ interface CreatePaymentResponse {
   confirmation_token: string
 }
 
+interface Tariff {
+  price: number
+  type: "sub" | "once"
+  period: string // например "1m", "3m"
+}
+
 export function Payment() {
+  // 1. Получаем тарифы из ENV (парсим JSON)
+  const tariffs: Tariff[] = useMemo(() => {
+    try {
+      const envTariffs = process.env.NEXT_PUBLIC_TARIFFS
+      return envTariffs ? JSON.parse(envTariffs) : []
+    } catch (e) {
+      console.error("Ошибка парсинга тарифов из ENV:", e)
+      return []
+    }
+  }, [])
+
   const [isProcessing, setIsProcessing] = useState(false)
-  const [activeSegmented, setActiveSegmented] = useState(2)
+  const [selectedIndex, setSelectedIndex] = useState(0) // Индекс выбранного тарифа
   const [isChecking, setIsChecking] = useState(false)
   const [showWidget, setShowWidget] = useState(false)
   const [token, setToken] = useState<string | null>(null)
@@ -35,12 +52,10 @@ export function Payment() {
     message: "",
   })
 
-  const { user, loading, error, setUser } = useUserStore()
-
-  // Функция для тихого обновления данных пользователя без перезагрузки страницы
+  const { user, loading, error } = useUserStore()
   const fetchUser = useUserStore((s) => s.fetchUser)
 
-  // 1. Функция проверки статуса (Polling)
+  // Поллинг статуса платежа
   const verifyPayment = async (paymentId: number) => {
     const interval = setInterval(async () => {
       try {
@@ -48,13 +63,10 @@ export function Payment() {
           params: { payment_id: paymentId },
         })
 
-        console.log("Статус платежа:", response.status)
-
         if (response.status === "success") {
           clearInterval(interval)
           setIsChecking(false)
-          if (!user) return
-          await fetchUser(user.telegram_id)
+          if (user) await fetchUser(user.telegram_id)
           setErrorDialog({ opened: true, message: "Оплата подтверждена! Подписка активирована." })
         } else if (response.status === "failed") {
           clearInterval(interval)
@@ -66,32 +78,21 @@ export function Payment() {
       }
     }, 3000)
 
-    // Лимит 10 минут
-    setTimeout(() => clearInterval(interval), 600000)
+    setTimeout(() => clearInterval(interval), 600000) // 10 минут лимит
   }
 
-  // 2. Функция создания платежа
   const handlePayment = async () => {
-    if (!user || isProcessing) return
-
-    const tariff = {
-      1: { amount: 80, type: "once", months: 1 },
-      2: { amount: 70, type: "sub", months: 1 },
-      3: { amount: 210, type: "once", months: 3 },
-    }[activeSegmented as 1 | 2 | 3]
-
-    if (!tariff) {
-      setErrorDialog({ opened: true, message: "Тариф не найден" })
-      return
-    }
+    const selectedTariff = tariffs[selectedIndex]
+    if (!user || isProcessing || !selectedTariff) return
 
     setIsProcessing(true)
     try {
       const data = await api.post<CreatePaymentResponse>("/api/payments/create", {
         telegram_id: user.telegram_id,
-        amount: tariff.amount,
-        type: tariff.type,
-        months: tariff.months,
+        amount: selectedTariff.price,
+        type: selectedTariff.type,
+        // Извлекаем число месяцев из строки "1m" или "3m"
+        months: parseInt(selectedTariff.period) || 1,
         unique_payload: crypto.randomUUID(),
       })
 
@@ -105,7 +106,11 @@ export function Payment() {
     }
   }
 
-  // --- РЕНДЕРЫ СОСТОЯНИЙ ---
+  // Вспомогательная функция для красивого названия периода
+  const getPeriodLabel = (t: Tariff) => {
+    if (t.type === "sub") return "Авто"
+    return t.period === "3m" ? "3 мес" : "1 мес"
+  }
 
   if (loading) return <div className="p-8 text-center text-gray-400">Загрузка...</div>
   if (error) return <div className="p-8 text-center text-red-500">Ошибка: {error}</div>
@@ -151,17 +156,19 @@ export function Payment() {
     )
   }
 
+  const currentTariff = tariffs[selectedIndex]
+
   return (
     <div className="w-full pb-10">
       <Block strong inset className="!my-2">
         <Segmented strong>
-          {[1, 2, 3].map((val) => (
+          {tariffs.map((t, index) => (
             <SegmentedButton
-              key={val}
-              active={activeSegmented === val}
-              onClick={() => setActiveSegmented(val)}
+              key={index}
+              active={selectedIndex === index}
+              onClick={() => setSelectedIndex(index)}
             >
-              {val === 1 ? "1 мес" : val === 2 ? "Авто" : "3 мес"}
+              {getPeriodLabel(t)}
             </SegmentedButton>
           ))}
         </Segmented>
@@ -173,27 +180,24 @@ export function Payment() {
 
       <Card className="!m-0">
         <div className="flex flex-col items-center py-8 text-center justify-center min-h-[160px]">
-          {activeSegmented === 1 && (
+          {currentTariff && (
             <>
-              <div className="text-5xl font-bold mb-1">80₽</div>
-              <div className="text-gray-400 text-sm">разовый платеж</div>
-            </>
-          )}
-
-          {activeSegmented === 2 && (
-            <>
-              <div className="bg-green-600 text-white text-[10px] px-3 py-0.5 rounded-full uppercase font-black mb-3">
-                ХИТ
+              {currentTariff.type === "sub" && (
+                <div className="bg-green-600 text-white text-[10px] px-3 py-0.5 rounded-full uppercase font-black mb-3">
+                  ХИТ
+                </div>
+              )}
+              <div className="text-7xl font-black text-primary leading-none mb-1">
+                {currentTariff.price}₽
               </div>
-              <div className="text-7xl font-black text-primary leading-none mb-1">70₽</div>
-              <div className="text-sm font-bold uppercase">Ежемесячно</div>
-            </>
-          )}
-
-          {activeSegmented === 3 && (
-            <>
-              <div className="text-5xl font-bold mb-1">210₽</div>
-              <div className="text-gray-400 text-sm italic">выгода 30₽</div>
+              <div className="text-sm font-bold uppercase opacity-50">
+                {currentTariff.type === "sub" ? "Ежемесячное списание" : "Разовый платеж"}
+              </div>
+              {currentTariff.period === "3m" && (
+                <div className="text-green-500 text-xs mt-2 font-bold italic">
+                  Выгодное предложение
+                </div>
+              )}
             </>
           )}
         </div>
@@ -202,16 +206,16 @@ export function Payment() {
           <Button
             large
             rounded
-            disabled={isProcessing}
+            disabled={isProcessing || !currentTariff}
             onClick={handlePayment}
-            className={activeSegmented === 2 ? "shadow-md" : ""}
+            className={currentTariff?.type === "sub" ? "shadow-md" : ""}
           >
             {isProcessing ? (
               <div className="flex items-center space-x-2">
                 <Preloader className="w-5 h-5" />
                 <span>Загрузка...</span>
               </div>
-            ) : activeSegmented === 2 ? (
+            ) : currentTariff?.type === "sub" ? (
               "Подписаться"
             ) : (
               "Купить"
@@ -223,7 +227,7 @@ export function Payment() {
       <Dialog
         opened={errorDialog.opened}
         onBackdropClick={() => setErrorDialog({ opened: false, message: "" })}
-        title="Упс!"
+        title="Уведомление"
         content={errorDialog.message}
         buttons={
           <DialogButton onClick={() => setErrorDialog({ opened: false, message: "" })}>

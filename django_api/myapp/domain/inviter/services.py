@@ -29,7 +29,7 @@ def apply_inviter_bonus(user: TelegramUser) -> TelegramUser | None:
         return None
 
     # 4. Начисляем бонус
-    inviter.end_date = calculate_new_end_date_days(inviter.end_date, 20)
+    inviter.end_date = calculate_new_end_date_days(inviter.end_date, 10)
     user.invited_bonus_given = True
 
     return inviter

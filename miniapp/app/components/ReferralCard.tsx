@@ -49,7 +49,7 @@ export function ReferralCard() {
           <div className="flex justify-between items-center">
             <div>
               <p className="text-[10px] uppercase font-black opacity-80 tracking-tighter">Акция</p>
-              <h3 className="text-xl font-bold leading-none">+20 ДНЕЙ</h3>
+              <h3 className="text-xl font-bold leading-none">+10 ДНЕЙ</h3>
             </div>
             <div className="bg-white/20 backdrop-blur-md rounded-lg p-2 text-[10px] font-bold text-center leading-tight">
               ЗА КАЖДОГО
@@ -62,7 +62,7 @@ export function ReferralCard() {
         <div className="p-4 space-y-4">
           <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
             Ваш друг получит доступ, а вы —{" "}
-            <span className="text-primary font-bold">20 дней подписки</span> в подарок после его
+            <span className="text-primary font-bold">10 дней подписки</span> в подарок после его
             первой покупки.
           </p>
 

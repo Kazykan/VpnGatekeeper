@@ -198,6 +198,14 @@ class DjangoAPI {
     })
     return res.data
   }
+
+  async unbindCard(telegramId: number) {
+    await this.ensureAuth()
+    const res = await this.api.post(`/api/payments/unbind-card/`, {
+      telegram_id: telegramId,
+    })
+    return res.data
+  }
 }
 
 const djangoApi = new DjangoAPI()

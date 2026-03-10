@@ -48,6 +48,10 @@ class TelegramUser(models.Model):
         null=True,
     )  # Опционально: статус последней попытки автоплатежа
 
+    card_last4 = models.CharField(
+        max_length=10, blank=True, null=True
+    )  # Опционально: последние 4 цифры карты
+
     def __str__(self):
         return f"{self.name} ({self.telegram_id})"
 

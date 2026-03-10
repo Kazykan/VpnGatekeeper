@@ -1,8 +1,9 @@
 // types/user.ts
 export interface User {
   id: number
+  card_last4: string
   name: string
-  sub_token: string      // <-- ОБЯЗАТЕЛЬНО для ссылки подписки
+  sub_token: string // <-- ОБЯЗАТЕЛЬНО для ссылки подписки
   telegram_id: number
   xray_id?: string | null
   end_date?: string | null

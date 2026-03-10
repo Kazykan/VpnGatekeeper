@@ -11,6 +11,7 @@ from myapp.views import (
     PaymentViewSet,
     ServerViewSet,
     TelegramUserViewSet,
+    UnbindCardView,
     user_sub_link_view,
 )
 
@@ -28,6 +29,7 @@ urlpatterns = [
         name="all-amnezia-stats",
     ),
     path("api/payments/create/", CreatePaymentView.as_view(), name="create-payment"),
+    path("api/payments/unbind-card/", UnbindCardView.as_view(), name="unbind-card"),
     path("api/", include(router.urls)),
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

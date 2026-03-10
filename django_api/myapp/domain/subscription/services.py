@@ -53,11 +53,11 @@ def extend_subscription_task(user_id, months):
     if inviter_to_notify:
         send_message(
             inviter_to_notify["tg_id"],
-            f"Вам начислено +20 дней за приглашение {inviter_to_notify['referral_name']}!",
+            f"Вам начислено +10 дней за приглашение {inviter_to_notify['referral_name']}!",
         )
         send_message_to_admin_chanel(
             f"Пользователю: {inviter_to_notify['inviter_name']} - {inviter_to_notify['tg_id']} "
-            f"начислено +20 дней\nза приглашение {inviter_to_notify['referral_name']}!",
+            f"начислено +10 дней\nза приглашение {inviter_to_notify['referral_name']}!",
         )
 
     # 3. ЗАПУСКАЕМ СИНХРОНИЗАЦИЮ
