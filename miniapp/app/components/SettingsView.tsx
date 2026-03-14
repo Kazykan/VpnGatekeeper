@@ -104,7 +104,7 @@ export function SettingsView({ user }: Props) {
               Отмена
             </DialogButton>
             <DialogButton onClick={handleUnbind} className="text-red-500">
-              {loading ? <Preloader size="w-5 h-5" /> : "Удалить"}
+              {loading ? <Preloader className="w-5 h-5" /> : "Удалить"}
             </DialogButton>
           </>
         }
