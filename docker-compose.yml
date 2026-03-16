@@ -24,8 +24,8 @@ services:
     command: ${DJANGO_COMMAND:-python manage.py runserver 0.0.0.0:8000}
     volumes:
       - ./django_api:/app
-      - django_static:/app/static # Добавляем это
-      - django_media:/app/media # И это (для картинок)
+      - ./static_content/static:/app/static  # Теперь статика будет тут
+      - ./static_content/media:/app/media    # А медиа тут
       - ./backups_data:/app/backups # Теперь бэкапы будут в папке backups_data на сервере
       - ./.env:/app/.env:ro # Прокидываем файл только для чтения (read-only)
     ports:
@@ -136,5 +136,3 @@ services:
 
 volumes:
   postgres_data:
-  django_static:
-  django_media:
