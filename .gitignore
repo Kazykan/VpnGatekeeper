@@ -11,3 +11,7 @@ django_api/database.db
 celerybeat-schedule
 backups_data/
 backups/
+
+# Статика и медиа
+static_content/static/
+static_content/media/
