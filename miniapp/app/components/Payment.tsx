@@ -7,7 +7,6 @@ import {
   Block,
   BlockTitle,
   Button,
-  Card,
   Dialog,
   DialogButton,
   Preloader,
@@ -25,11 +24,10 @@ interface CreatePaymentResponse {
 interface Tariff {
   price: number
   type: "sub" | "once"
-  period: string // например "1m", "3m"
+  period: string
 }
 
 export function Payment() {
-  // 1. Получаем тарифы из ENV (парсим JSON)
   const tariffs: Tariff[] = useMemo(() => {
     try {
       const envTariffs = process.env.NEXT_PUBLIC_TARIFFS
@@ -41,7 +39,7 @@ export function Payment() {
   }, [])
 
   const [isProcessing, setIsProcessing] = useState(false)
-  const [selectedIndex, setSelectedIndex] = useState(0) // Индекс выбранного тарифа
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const [isChecking, setIsChecking] = useState(false)
   const [showWidget, setShowWidget] = useState(false)
   const [token, setToken] = useState<string | null>(null)
@@ -55,7 +53,6 @@ export function Payment() {
   const { user, loading, error } = useUserStore()
   const fetchUser = useUserStore((s) => s.fetchUser)
 
-  // Поллинг статуса платежа
   const verifyPayment = async (paymentId: number) => {
     const interval = setInterval(async () => {
       try {
@@ -67,18 +64,17 @@ export function Payment() {
           clearInterval(interval)
           setIsChecking(false)
           if (user) await fetchUser(user.telegram_id)
-          setErrorDialog({ opened: true, message: "Оплата подтверждена! Подписка активирована." })
+          setErrorDialog({ opened: true, message: "Доступ успешно активирован." })
         } else if (response.status === "failed") {
           clearInterval(interval)
           setIsChecking(false)
-          setErrorDialog({ opened: true, message: "Платеж отклонен банком." })
+          setErrorDialog({ opened: true, message: "Ошибка транзакции." })
         }
       } catch (e) {
         console.error("Ошибка опроса статуса:", e)
       }
     }, 3000)
-
-    setTimeout(() => clearInterval(interval), 600000) // 10 минут лимит
+    setTimeout(() => clearInterval(interval), 600000)
   }
 
   const handlePayment = async () => {
@@ -91,7 +87,6 @@ export function Payment() {
         telegram_id: user.telegram_id,
         amount: selectedTariff.price,
         type: selectedTariff.type,
-        // Извлекаем число месяцев из строки "1m" или "3m"
         months: parseInt(selectedTariff.period) || 1,
         unique_payload: crypto.randomUUID(),
       })
@@ -106,35 +101,31 @@ export function Payment() {
     }
   }
 
-  // Вспомогательная функция для красивого названия периода
   const getPeriodLabel = (t: Tariff) => {
     if (t.type === "sub") return "Авто"
-    return t.period === "3m" ? "3 мес" : "1 мес"
+    return t.period === "3m" ? "90 дней" : "30 дней"
   }
 
-  if (loading) return <div className="p-8 text-center text-gray-400">Загрузка...</div>
-  if (error) return <div className="p-8 text-center text-red-500">Ошибка: {error}</div>
-  if (!user) return <div className="p-8 text-center text-gray-400">Пользователь не авторизован</div>
+  if (loading) return <div className="p-8 text-center text-gray-400 font-sans">Загрузка...</div>
+  if (error) return <div className="p-8 text-center text-red-500 font-sans">{error}</div>
+  if (!user) return <div className="p-8 text-center text-gray-400 font-sans">Не авторизован</div>
 
   if (isChecking) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
+      <div className="flex flex-col items-center justify-center p-12 text-center font-sans">
         <Preloader className="mb-4 w-10 h-10" />
-        <h3 className="text-lg font-bold">Ожидаем подтверждение</h3>
-        <p className="text-sm opacity-60">
-          Ваш платеж обрабатывается. Как только банк подтвердит операцию, доступ откроется
-          автоматически.
-        </p>
+        <h3 className="text-lg font-bold">Ожидание активации</h3>
+        <p className="text-sm opacity-60">Проверяем статус платежа...</p>
       </div>
     )
   }
 
   if (showWidget && token) {
     return (
-      <div className="flex flex-col min-h-screen bg-white">
+      <div className="flex flex-col min-h-screen bg-white font-sans">
         <div className="p-2 border-b">
           <Button clear onClick={() => setShowWidget(false)}>
-            ← Отмена
+            ← Назад
           </Button>
         </div>
         <div className="flex-1">
@@ -147,7 +138,7 @@ export function Payment() {
             }}
             onError={(err) => {
               console.error(err)
-              setErrorDialog({ opened: true, message: "Ошибка во время оплаты" })
+              setErrorDialog({ opened: true, message: "Ошибка оплаты" })
               setShowWidget(false)
             }}
           />
@@ -159,9 +150,15 @@ export function Payment() {
   const currentTariff = tariffs[selectedIndex]
 
   return (
-    <div className="w-full pb-10">
-      <Block strong inset className="!my-2">
-        <Segmented strong>
+    <div className="w-full pb-8 font-sans">
+      <BlockTitle className="mt-6! mb-2! uppercase text-2xs tracking-widest opacity-50 px-4">
+        Параметры услуги
+      </BlockTitle>
+
+      {/* ГЛАВНОЕ ИЗМЕНЕНИЕ: Всё внутри одного Block strong inset */}
+      <Block strong inset className="my-0! space-y-6 pt-4 pb-6">
+        {/* Переключатель тарифов */}
+        <Segmented strong rounded className="border-2 border-primary/10">
           {tariffs.map((t, index) => (
             <SegmentedButton
               key={index}
@@ -172,57 +169,89 @@ export function Payment() {
             </SegmentedButton>
           ))}
         </Segmented>
-      </Block>
 
-      <BlockTitle className="!mt-4 !mb-2 uppercase text-[11px] opacity-60">
-        Вариант подписки
-      </BlockTitle>
-
-      <Card className="!m-0">
-        <div className="flex flex-col items-center py-8 text-center justify-center min-h-[160px]">
+        {/* Блок цены (теперь без фона, чтобы не было квадратов) */}
+        <div className="flex flex-col items-center py-2 text-center">
           {currentTariff && (
             <>
-              {currentTariff.type === "sub" && (
-                <div className="bg-green-600 text-white text-[10px] px-3 py-0.5 rounded-full uppercase font-black mb-3">
-                  ХИТ
-                </div>
-              )}
-              <div className="text-7xl font-black text-primary leading-none mb-1">
-                {currentTariff.price}₽
+              {/* Этот блок теперь ПРИСУТСТВУЕТ всегда, поэтому высота не меняется */}
+              <div
+                className="text-primary text-[9px] font-bold uppercase tracking-tighter mb-2 transition-opacity duration-200"
+                style={{
+                  opacity: currentTariff.type === "sub" ? 1 : 0,
+                  visibility: currentTariff.type === "sub" ? "visible" : "hidden",
+                }}
+              >
+                ● Оптимальный выбор
               </div>
-              <div className="text-sm font-bold uppercase opacity-50">
-                {currentTariff.type === "sub" ? "Ежемесячное списание" : "Разовый платеж"}
+
+              <div className="flex items-baseline justify-center">
+                <span className="text-6xl font-black text-primary tracking-tighter leading-none">
+                  {currentTariff.price}₽
+                </span>
+                <span className="ml-1 text-sm font-bold opacity-30">
+                  /{currentTariff.period === "3m" ? "3мес" : "мес"}
+                </span>
               </div>
-              {currentTariff.period === "3m" && (
-                <div className="text-green-500 text-xs mt-2 font-bold italic">
-                  Выгодное предложение
-                </div>
-              )}
+
+              {/* 3. Текст про автопродление */}
+              <div
+                className="mt-2 min-h-3.5 text-2xs font-medium transition-opacity duration-200"
+                style={{
+                  opacity: currentTariff.type === "sub" ? 1 : 0,
+                  color: "#f97316", // Оранжевый (orange-500) напрямую для надежности
+                }}
+              >
+                Автоматическое продление каждые 30 дней
+              </div>
+
+              {/* 4. Невидимый блок-заглушка для разового платежа (чтобы высота не прыгала) */}
+              <div
+                className="text-2xs font-medium text-gray-400"
+                style={{
+                  display: currentTariff.type === "once" ? "block" : "none",
+                }}
+              >
+                Разовый платеж
+              </div>
             </>
           )}
         </div>
 
-        <div className="px-4 pb-4">
+        {/* Описание услуги мелким шрифтом */}
+        <div className="text-center px-2">
+          <p className="text-[12px] leading-snug text-gray-500 italic opacity-80">
+            Персональное проксирование данных для защиты трафика и безопасного доступа к сетевым
+            ресурсам (IT-услуга).
+          </p>
+        </div>
+
+        {/* Кнопка действия */}
+        <div className="px-2">
           <Button
             large
             rounded
             disabled={isProcessing || !currentTariff}
             onClick={handlePayment}
-            className={currentTariff?.type === "sub" ? "shadow-md" : ""}
+            className="shadow-sm"
           >
             {isProcessing ? (
               <div className="flex items-center space-x-2">
-                <Preloader className="w-5 h-5" />
+                <Preloader className="w-4 h-4" />
                 <span>Загрузка...</span>
               </div>
-            ) : currentTariff?.type === "sub" ? (
-              "Подписаться"
             ) : (
-              "Купить"
+              "Оформить доступ"
             )}
           </Button>
         </div>
-      </Card>
+
+        {/* Нижние метки для солидности */}
+        <div className="flex justify-center space-x-6 opacity-20 text-[8px] font-bold uppercase tracking-widest pt-2">
+          <span>TLS Encryption</span>
+          <span>Dedicated Port</span>
+        </div>
+      </Block>
 
       <Dialog
         opened={errorDialog.opened}

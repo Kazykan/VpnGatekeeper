@@ -1,6 +1,6 @@
 "use client"
 
-import { Block } from "konsta/react"
+import { Block, BlockTitle } from "konsta/react"
 import { Payment } from "./Payment"
 import { User } from "@/app/types/user"
 
@@ -26,38 +26,40 @@ export function SubscriptionStatus({ user }: Props) {
 
   // 3. Если активна — показываем статус
   return (
-    <Block strong inset className="!my-2 border-l-4 border-primary bg-primary/5">
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wider">Подписка активна</p>
-          <p className="text-xl font-bold">Осталось: {daysLeft} дн.</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[10px] text-gray-500 uppercase">До {endDate?.toLocaleDateString()}</p>
-        </div>
-      </div>
-
-      {user.autopay_enabled && autopayDate && (
-        <div className="mt-4 p-2 bg-black/20 rounded-lg flex items-center gap-2">
-          <span className="text-lg">💳</span>
-          <div className="text-[11px] leading-tight text-gray-300">
-            Автопродление включено. Списание произойдет <br />
-            <span className="text-primary font-semibold">
-              {autopayDate.toLocaleDateString()}
-            </span>{" "}
-            (за 2 дня до конца)
+    <>
+      <Block strong inset className="!my-2 border-l-4 border-primary bg-primary/5">
+        <div className="flex justify-between items-start mb-2 font-sans">
+          <div>
+            <p className="text-[10px] text-gray-400 uppercase tracking-widest">Статус услуги</p>
+            <p className="text-xl font-bold">Осталось: {daysLeft} дн.</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-gray-500 uppercase tracking-tighter">
+              До {endDate?.toLocaleDateString()}
+            </p>
           </div>
         </div>
-      )}
 
+        {user.autopay_enabled && autopayDate && (
+          <div className="mt-4 p-3 bg-black/5 rounded-xl flex items-center gap-3">
+            <span className="text-lg opacity-50 font-sans">💳</span>
+            <div className="text-[11px] leading-tight text-gray-500 font-sans">
+              Автопродление активно. Списание: <br />
+              <span className="text-primary font-bold">{autopayDate.toLocaleDateString()}</span>
+            </div>
+          </div>
+        )}
+      </Block>
+
+      {/* ИЗМЕНЕНО: Если дней мало, Payment рендерится ПОД блоком статуса, а не внутри него */}
       {!user.autopay_enabled && daysLeft <= 5 && (
-        <div className="mt-4">
-          <p className="text-[11px] text-orange-400 mb-2">
-            Советуем продлить заранее, чтобы не потерять доступ
-          </p>
+        <div className="animate-fadeIn">
+          <BlockTitle className="!mt-4 !mb-1 uppercase text-[10px] opacity-50 px-4">
+            Рекомендуем продлить
+          </BlockTitle>
           <Payment />
         </div>
       )}
-    </Block>
+    </>
   )
 }

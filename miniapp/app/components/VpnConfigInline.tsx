@@ -152,7 +152,7 @@ export function VpnConfigInline() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <List strong inset className="!my-0">
           <ListItem
-            title={<span className="text-sm font-bold">Ваша VPN подписка</span>}
+            title={<span className="text-sm font-bold">Ваша подписка</span>}
             subtitle="Единая ссылка для подключения"
             after={
               <Button

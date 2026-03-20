@@ -50,21 +50,19 @@ export default function Home() {
       <div className="pb-24">
         {/* ТАБ: VPN (ГЛАВНАЯ) */}
         {activeTab === "vpn" && (
-          <div className="animate-fadeIn space-y-4">
+          <div className="animate-fadeIn">
+            {" "}
             <UserInfo user={user} />
-
-            {/* Вся логика дней, дат и кнопок оплаты теперь внутри этого компонента */}
+            {/* Этот компонент теперь сам решит: показать статус или форму оплаты */}
             <SubscriptionStatus user={user} />
             <ConnectAction onClick={() => setActiveTab("stats")} />
-
             <ReferralCard />
-
             <Block
               strong
               inset
-              className="text-center text-[10px] text-gray-500 uppercase tracking-widest opacity-60"
+              className="my-4! text-center text-2xs text-gray-500 uppercase tracking-[0.2em] opacity-40 font-bold"
             >
-              Протоколы: VLESS + AmneziaWG
+              Secure Protocol: VLESS
             </Block>
           </div>
         )}
