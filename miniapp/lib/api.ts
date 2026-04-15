@@ -24,7 +24,7 @@ instance.interceptors.response.use(
       localStorage.removeItem("session")
     }
     return Promise.reject(error)
-  }
+  },
 )
 
 // ГЛАВНОЕ: Экспортируем с "обманкой" для TypeScript

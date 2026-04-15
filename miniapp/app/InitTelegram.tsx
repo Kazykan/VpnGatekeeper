@@ -6,11 +6,9 @@ import { useSessionStore } from "@/store/useSessionStore"
 import { useParams } from "next/navigation"
 
 export default function InitTelegram() {
-  const { setUser, setError, setLoading, fetchBySubToken } = useUserStore()
+  const { setUser, setError, setLoading, fetchBySubToken, fetchUser } = useUserStore()
   const setSession = useSessionStore((s) => s.setSession)
   const params = useParams()
-
-  // Используем ref, чтобы запрос не улетал дважды при React Strict Mode
   const initialized = useRef(false)
 
   useEffect(() => {
@@ -19,25 +17,24 @@ export default function InitTelegram() {
     const subToken = params?.token
     const tg = typeof window !== "undefined" ? window.Telegram?.WebApp : null
 
-    // 1. ПРИОРИТЕТ: Вход по UUID (Прямая ссылка)
-    // Если токен есть, сразу идем за данными и не ждем ничего другого
-    if (subToken) {
-      console.log("🛠 Init by Token:", subToken)
-      fetchBySubToken(subToken as string)
-      initialized.current = true
-      return
-    }
+    const runInit = async () => {
+      // 1. Сначала подтягиваем всё из кэша для мгновенного отображения
+      const savedUser = localStorage.getItem("user")
+      const savedSession = localStorage.getItem("session")
+      if (savedUser) setUser(JSON.parse(savedUser))
+      if (savedSession) setSession(savedSession)
 
-    // 2. СТАНДАРТ: Telegram Mini App
-    if (tg && tg.initData) {
-      console.log("🛠 Init by Telegram")
-      tg.ready()
-      tg.expand()
+      // 2. ПРИОРИТЕТ: Вход по UUID (ссылка /pay/...)
+      if (subToken) {
+        await fetchBySubToken(subToken as string)
+        initialized.current = true
+        return
+      }
 
-      const authorize = async () => {
-        // Оптимистичный UI: грузим из кеша
-        const savedUser = localStorage.getItem("user")
-        if (savedUser) setUser(JSON.parse(savedUser))
+      // 3. СТАНДАРТ: Telegram Mini App
+      if (tg && tg.initData) {
+        tg.ready()
+        tg.expand()
 
         try {
           const r = await fetch("/api/auth/telegram/", {
@@ -47,30 +44,33 @@ export default function InitTelegram() {
           })
           const data = await r.json()
 
-          if (data.session) {
+          if (data.session && data.django_first_user) {
             localStorage.setItem("session", data.session)
+            localStorage.setItem("user", JSON.stringify(data.django_first_user))
             setSession(data.session)
-            if (data.django_first_user) setUser(data.django_first_user)
+            setUser(data.django_first_user) // Обновит данные поверх кэша
           }
         } catch (e) {
-          setError("Ошибка сети")
+          console.error("Auth error:", e)
         } finally {
           setLoading(false)
         }
-      }
-
-      authorize()
-      initialized.current = true
-    } else {
-      // 3. ПРОВЕРКА КЕША (если просто открыли сайт)
-      const savedUser = localStorage.getItem("user")
-      if (savedUser) {
-        setUser(JSON.parse(savedUser))
+      } else if (savedUser) {
+        // 4. Если нет ТГ, но есть кэш — пробуем обновить данные юзера в фоне
+        const userObj = JSON.parse(savedUser)
+        if (userObj.telegram_id) {
+          fetchUser(userObj.telegram_id) // Фоновое обновление
+        }
         setLoading(false)
-        initialized.current = true
+      } else {
+        setError("Доступ запрещен")
+        setLoading(false)
       }
+      initialized.current = true
     }
-  }, [params?.token]) // Убираем лишние зависимости, оставляем только триггер по URL
+
+    runInit()
+  }, [params?.token])
 
   return null
 }
