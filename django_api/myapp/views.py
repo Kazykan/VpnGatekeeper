@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramUserViewSet(viewsets.ModelViewSet):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     queryset = TelegramUser.objects.all()
     serializer_class = TelegramUserSerializer
