@@ -308,41 +308,10 @@ def user_sub_link_view(request, token):
     sub_data = prepare_subscription_data(user, balanced_creds)
 
     # 3. Formating Response
-    happ_config = {
-        "Name": f"Rufat Connect {user.telegram_id}",
-        "GlobalProxy": "true",
-        "RouteOrder": "block-proxy-direct",
-        "RemoteDNSType": "DoH",
-        "RemoteDNSDomain": "https://cloudflare-dns.com/dns-query",
-        "RemoteDNSIP": "1.1.1.1",
-        "DomesticDNSType": "DoH",
-        "DomesticDNSDomain": "https://dns.google/dns-query",
-        "DomesticDNSIP": "8.8.8.8",
-        "Geoipurl": "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat",
-        "Geositeurl": "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat",
-        "DnsHosts": {"cloudflare-dns.com": "1.1.1.1", "dns.google": "8.8.8.8"},
-        "DirectSites": ["geosite:CATEGORY-RU"],
-        "DirectIp": [
-            "10.0.0.0/8",
-            "172.16.0.0/12",
-            "192.168.0.0/16",
-            "169.254.0.0/16",
-            "224.0.0.0/4",
-            "255.255.255.255",
-            "geoip:RU",
-        ],
-        "DomainStrategy": "IPIfNonMatch",
-        "FakeDNS": "false",
-        "UseChunkFiles": "true",
-        # ДОБАВЛЯЕМ ССЫЛКИ (Outbounds)
-        "Outbounds": sub_data.links,  # Список строк типа vless://, ss:// и т.д.
-    }
-
-    # Преобразуем в JSON-строку
-    content = json.dumps(happ_config, indent=2, ensure_ascii=False)
-
-    # Меняем content_type на application/json
-    response = HttpResponse(content, content_type="application/json; charset=utf-8")
+    content = "\n".join(sub_data.links)
+    response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+    # конфиг для Happ для настроек обхода ru сайтов они идут на прямую все делается в https://www.happ.su/main/ru/dev-docs/routing
+    happ_config = "happ://routing/onadd/eyJOYW1lIjoiIiwiR2xvYmFsUHJveHkiOiJ0cnVlIiwiUm91dGVPcmRlciI6ImJsb2NrLXByb3h5LWRpcmVjdCIsIlJlbW90ZUROU1R5cGUiOiJEb0giLCJSZW1vdGVETlNEb21haW4iOiJodHRwczovL2Nsb3VkZmxhcmUtZG5zLmNvbS9kbnMtcXVlcnkiLCJSZW1vdGVETlNJUCI6IjEuMS4xLjEiLCJEb21lc3RpY0ROU1R5cGUiOiJEb0giLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vZG5zLmdvb2dsZS9kbnMtcXVlcnkiLCJEb21lc3RpY0ROU0lQIjoiOC44LjguOCIsIkdlb2lwdXJsIjoiaHR0cHM6Ly9naXRodWIuY29tL0xveWFsc29sZGllci92MnJheS1ydWxlcy1kYXQvcmVsZWFzZXMvbGF0ZXN0L2Rvd25sb2FkL2dlb2lwLmRhdCIsIkdlb3NpdGV1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vTG95YWxzb2xkaWVyL3YycmF5LXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2Vvc2l0ZS5kYXQiLCJMYXN0VXBkYXRlZCI6IjE3NzYyODk3ODYiLCJEbnNIb3N0cyI6eyJjbG91ZGZsYXJlLWRucy5jb20iOiIxLjEuMS4xIiwiZG5zLmdvb2dsZSI6IjguOC44LjgifSwiRGlyZWN0U2l0ZXMiOlsiZ2Vvc2l0ZTpDQVRFR09SWS1SVSJdLCJEaXJlY3RJcCI6WyIxMC4wLjAuMC84IiwiMTcyLjE2LjAuMC8xMiIsIjE5Mi4xNjguMC4wLzE2IiwiMTY5LjI1NC4wLjAvMTYiLCIyMjQuMC4wLjAvNCIsIjI1NS4yNTUuMjU1LjI1NSIsImdlb2lwOlJVIl0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6W10sIkJsb2NrSXAiOltdLCJEb21haW5TdHJhdGVneSI6IklQSWZOb25NYXRjaCIsIkZha2VETlMiOiJmYWxzZSIsIlVzZUNodW5rRmlsZXMiOiJ0cnVlIn0"
 
     # --- ДОБАВЛЯЕМ ОБЪЯВЛЕНИЕ ---
     announce_text = get_subscription_announce(user)
@@ -365,5 +334,6 @@ def user_sub_link_view(request, token):
     response["Profile-Title"] = f"Ruf id_{user.telegram_id}"
     # Интервал обновления (в часах)
     response["Profile-Update-Interval"] = "7"
+    response["routing"] = happ_config
 
     return response
