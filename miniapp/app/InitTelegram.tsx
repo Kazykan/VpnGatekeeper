@@ -1,92 +1,76 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useUserStore } from "@/store/useUserStore"
 import { useSessionStore } from "@/store/useSessionStore"
+import { useParams } from "next/navigation"
 
 export default function InitTelegram() {
-  const setUser = useUserStore((s) => s.setUser)
-  const setError = useUserStore((s) => s.setError)
-  const setLoading = useUserStore((s) => s.setLoading)
+  const { setUser, setError, setLoading, fetchBySubToken } = useUserStore()
   const setSession = useSessionStore((s) => s.setSession)
+  const params = useParams()
+
+  // Используем ref, чтобы запрос не улетал дважды при React Strict Mode
+  const initialized = useRef(false)
 
   useEffect(() => {
-    const tg = window.Telegram?.WebApp
+    if (initialized.current) return
 
-    if (!tg) {
-      setError("Telegram WebApp API недоступен")
+    const subToken = params?.token
+    const tg = typeof window !== "undefined" ? window.Telegram?.WebApp : null
+
+    // 1. ПРИОРИТЕТ: Вход по UUID (Прямая ссылка)
+    // Если токен есть, сразу идем за данными и не ждем ничего другого
+    if (subToken) {
+      console.log("🛠 Init by Token:", subToken)
+      fetchBySubToken(subToken as string)
+      initialized.current = true
       return
     }
 
-    // Сообщаем Telegram, что приложение готово, и разворачиваем на всю высоту
-    tg.ready()
-    tg.expand()
+    // 2. СТАНДАРТ: Telegram Mini App
+    if (tg && tg.initData) {
+      console.log("🛠 Init by Telegram")
+      tg.ready()
+      tg.expand()
 
-    const authorize = async () => {
-      const initData = tg.initData
-      if (!initData) {
-        setError("Откройте Mini App внутри Telegram")
-        setLoading(false)
-        return
+      const authorize = async () => {
+        // Оптимистичный UI: грузим из кеша
+        const savedUser = localStorage.getItem("user")
+        if (savedUser) setUser(JSON.parse(savedUser))
+
+        try {
+          const r = await fetch("/api/auth/telegram/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData: tg.initData }),
+          })
+          const data = await r.json()
+
+          if (data.session) {
+            localStorage.setItem("session", data.session)
+            setSession(data.session)
+            if (data.django_first_user) setUser(data.django_first_user)
+          }
+        } catch (e) {
+          setError("Ошибка сети")
+        } finally {
+          setLoading(false)
+        }
       }
 
-      // Если в стейте еще нет юзера (первая загрузка без кэша), включаем лоадер
-      // Если юзер уже есть (из кэша), лоадер не показываем, обновление пройдет фоном
-      const currentUser = useUserStore.getState().user
-      if (!currentUser) setLoading(true)
-
-      try {
-        const r = await fetch("/api/auth/telegram/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData }),
-        })
-
-        const data = await r.json()
-
-        if (!r.ok || !data.session) {
-          setError(data.error || "Ошибка авторизации")
-          return
-        }
-
-        // Обновляем сессию и кэш сессии
-        localStorage.setItem("session", data.session)
-        setSession(data.session)
-
-        if (data.django_first_user) {
-          // ВАЖНО: Перезаписываем localStorage свежими данными из БД (новая дата подписки)
-          localStorage.setItem("user", JSON.stringify(data.django_first_user))
-          // Обновляем глобальный стейт — интерфейс перерисуется с новой датой
-          setUser(data.django_first_user)
-        } else {
-          setError("NOT_REGISTERED")
-          setUser(null)
-        }
-      } catch (e: any) {
-        console.error("Auth error:", e)
-        setError(e.message)
-      } finally {
+      authorize()
+      initialized.current = true
+    } else {
+      // 3. ПРОВЕРКА КЕША (если просто открыли сайт)
+      const savedUser = localStorage.getItem("user")
+      if (savedUser) {
+        setUser(JSON.parse(savedUser))
         setLoading(false)
+        initialized.current = true
       }
     }
-
-    // --- ЛОГИКА СТРАТЕГИИ SWR (Stale-While-Revalidate) ---
-
-    const savedSession = localStorage.getItem("session")
-    const savedUser = localStorage.getItem("user")
-
-    // 1. Если есть старые данные, мгновенно подставляем их в UI
-    if (savedSession && savedUser) {
-      setSession(savedSession)
-      setUser(JSON.parse(savedUser))
-      // Мы не вызываем setLoading(false) здесь преждевременно,
-      // чтобы дождаться конца фоновой проверки, если это нужно.
-      // Но в данном случае authorize() сам разберется с setLoading.
-    }
-
-    // 2. В ЛЮБОМ СЛУЧАЕ идем на сервер за актуальными данными.
-    authorize()
-  }, [setUser, setError, setLoading, setSession])
+  }, [params?.token]) // Убираем лишние зависимости, оставляем только триггер по URL
 
   return null
 }

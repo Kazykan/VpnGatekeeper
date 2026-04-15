@@ -1,6 +1,7 @@
+import json
 from typing import cast
 import logging
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.response import Response
@@ -9,15 +10,13 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from myapp.domain.subscription.load_balancer import get_balanced_credentials
-from myapp.domain.subscription.calculations import prepare_subscription_data
+from myapp.domain.subscription.calculations import get_subscription_announce, prepare_subscription_data
 from myapp.domain.credentials.selectors import (
     get_active_credentials_for_user,
     get_user_traffic_report,
 )
 from myapp.domain.credentials.exceptions import NoActiveSubscription
 from myapp.domain.credentials.services import generate_new_config_for_user
-from myapp.tasks.provisioning import sync_vpn_cluster
-from myapp.domain.infrastructure.amnezia_gateway import AmneziaGateway
 from myapp.domain.amnezia.parser_conf import generate_simple_configs
 from myapp.tasks.check_payment import check_payment_status
 from myapp.domain.amnezia.services import collect_amnezia_stats
@@ -32,16 +31,17 @@ from .serializers import (
 )
 
 NEXT_PUBLIC_TELEGRAM_BOT_URL = settings.NEXT_PUBLIC_TELEGRAM_BOT_URL
+NEXT_PUBLIC_WEB_APP_URL = settings.NEXT_PUBLIC_WEB_APP_URL
 logger = logging.getLogger(__name__)
 
 
 class TelegramUserViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     queryset = TelegramUser.objects.all()
     serializer_class = TelegramUserSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["telegram_id", "invited_by"]
+    filterset_fields = ["telegram_id", "invited_by", "sub_token"]
 
     @action(detail=False, methods=["get"], url_path="full-stats")
     def get_stats_by_tg_id(self, request):
@@ -308,9 +308,48 @@ def user_sub_link_view(request, token):
     sub_data = prepare_subscription_data(user, balanced_creds)
 
     # 3. Formating Response
-    content = "\n".join(sub_data.links)
-    response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+    happ_config = {
+        "Name": f"Rufat Connect {user.telegram_id}",
+        "GlobalProxy": "true",
+        "RouteOrder": "block-proxy-direct",
+        "RemoteDNSType": "DoH",
+        "RemoteDNSDomain": "https://cloudflare-dns.com/dns-query",
+        "RemoteDNSIP": "1.1.1.1",
+        "DomesticDNSType": "DoH",
+        "DomesticDNSDomain": "https://dns.google/dns-query",
+        "DomesticDNSIP": "8.8.8.8",
+        "Geoipurl": "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat",
+        "Geositeurl": "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat",
+        "DnsHosts": {"cloudflare-dns.com": "1.1.1.1", "dns.google": "8.8.8.8"},
+        "DirectSites": ["geosite:CATEGORY-RU"],
+        "DirectIp": [
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "169.254.0.0/16",
+            "224.0.0.0/4",
+            "255.255.255.255",
+            "geoip:RU",
+        ],
+        "DomainStrategy": "IPIfNonMatch",
+        "FakeDNS": "false",
+        "UseChunkFiles": "true",
+        # ДОБАВЛЯЕМ ССЫЛКИ (Outbounds)
+        "Outbounds": sub_data.links,  # Список строк типа vless://, ss:// и т.д.
+    }
 
+    # Преобразуем в JSON-строку
+    content = json.dumps(happ_config, indent=2, ensure_ascii=False)
+
+    # Меняем content_type на application/json
+    response = HttpResponse(content, content_type="application/json; charset=utf-8")
+
+    # --- ДОБАВЛЯЕМ ОБЪЯВЛЕНИЕ ---
+    announce_text = get_subscription_announce(user)
+    if announce_text:
+        # Важно: Заголовок должен называться 'announce'
+        response["announce"] = announce_text
+        
     # Заголовок, который Happ распарсит для отображения графиков трафика
     user_info_header = (
         f"upload={sub_data.upload_bytes}; "
@@ -320,9 +359,10 @@ def user_sub_link_view(request, token):
     )
 
     # Ссылка на бота/личный кабинет
-    response["Profile-Web-Page-Url"] = NEXT_PUBLIC_TELEGRAM_BOT_URL  # ЗАМЕНИ НА СВОЕГО
+    response["Profile-Web-Page-Url"] = f"{NEXT_PUBLIC_TELEGRAM_BOT_URL}/pay/{user.sub_token}/"
+    response["support-url"] = NEXT_PUBLIC_TELEGRAM_BOT_URL
     response["Subscription-Userinfo"] = user_info_header
-    response["Profile-Title"] = f"Rufat Connect tg_{user.telegram_id}"
+    response["Profile-Title"] = f"Ruf id_{user.telegram_id}"
     # Интервал обновления (в часах)
     response["Profile-Update-Interval"] = "7"
 

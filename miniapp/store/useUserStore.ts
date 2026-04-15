@@ -6,7 +6,7 @@ export interface TrafficData {
   usedGb: string
   totalGb: string
   percent: number
-  details?: any[] // Добавим для расширенной статистики, если нужно
+  details?: any[]
 }
 
 interface UserStore {
@@ -17,9 +17,10 @@ interface UserStore {
   initData: string
 
   fetchUser: (telegram_id?: number) => Promise<void>
+  fetchBySubToken: (token: string) => Promise<void>
   fetchTraffic: () => Promise<void>
   setUser: (u: User | null) => void
-  setError: (msg: string) => void
+  setError: (msg: string | null) => void
   setLoading: (v: boolean) => void
   setInitData: (v: string) => void
 }
@@ -31,18 +32,36 @@ export const useUserStore = create<UserStore>((set, get) => ({
   error: null,
   initData: "",
 
+  // Метод 1: Загрузка по Telegram ID (через API Proxy)
   fetchUser: async (telegram_id?: number) => {
     try {
-      set({ loading: true })
-      // Запрашиваем через наш Next.js API Proxy
+      set({ loading: true, error: null })
       const data = await api.get<User>("/api/user/check", {
         params: { telegram_id },
       })
       get().setUser(data)
     } catch (e: any) {
-      set({ error: e.response?.data?.error || "Ошибка загрузки" })
-    } finally {
-      set({ loading: false })
+      set({ error: e.response?.data?.error || "Ошибка загрузки", loading: false })
+    }
+  },
+
+  // Метод 2: Загрузка по UUID токену (для входа по прямой ссылке)
+  fetchBySubToken: async (token: string) => {
+    try {
+      set({ loading: true, error: null })
+      const res = await api.get<any>("/api/auth/by-token", { params: { token } })
+
+      if (res.session) {
+        localStorage.setItem("session", res.session) // Сохраняем сессию!
+      }
+
+      if (res.django_first_user) {
+        get().setUser(res.django_first_user) // Кладём "голого" юзера в стейт
+      } else {
+        set({ error: "Пользователь не найден", loading: false })
+      }
+    } catch (e: any) {
+      set({ error: "Ошибка авторизации", loading: false })
     }
   },
 
@@ -69,15 +88,15 @@ export const useUserStore = create<UserStore>((set, get) => ({
         })
       }
     } catch (e: any) {
-      console.error("[TrafficStore] Ошибка загрузки:", e.message)
+      console.error("[UserStore] Ошибка трафика:", e.message)
     }
   },
 
   setUser: (u) => {
-    set({ user: u, loading: false })
-    // Если юзер найден — тянем трафик
-    if (u?.telegram_id) {
-      get().fetchTraffic()
+    set({ user: u, loading: false, error: null })
+    if (u) {
+      localStorage.setItem("user", JSON.stringify(u))
+      if (u.telegram_id) get().fetchTraffic()
     }
   },
 

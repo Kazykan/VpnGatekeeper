@@ -151,6 +151,13 @@ class DjangoAPI {
     return res.data
   }
 
+  async getUserBySubToken(token: string): Promise<User[]> {
+    const res = await this.api.get(`/api/users/`, {
+      params: { sub_token: token },
+    })
+    return res.data
+  }
+
   async getUsersByInvitedBy(invitedBy: number) {
     const res = await this.api.get(`/api/users/`, {
       params: { invited_by: invitedBy },

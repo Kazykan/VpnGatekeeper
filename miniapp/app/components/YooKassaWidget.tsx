@@ -1,77 +1,76 @@
 "use client"
 
-import React, { useEffect } from "react"
+import React, { useState } from "react"
+import Script from "next/script"
+import { Preloader } from "konsta/react"
 
-// Описываем, что именно возвращает конструктор виджета
-interface YookassaCheckoutInstance {
-  render: (containerId: string) => void
-  on: (event: string, callback: () => void) => void
-  destroy: () => void
-}
-
-// Описываем структуру самого конструктора в объекте window
-interface YooMoneyCheckoutWidgetConstructor {
-  new (config: {
-    confirmation_token: string
-    full_size?: boolean
-    error_callback?: (error: Error) => void
-  }): YookassaCheckoutInstance
+// Типизация для окна браузера
+declare global {
+  interface Window {
+    YooMoneyCheckoutWidget: any
+  }
 }
 
 interface Props {
   confirmationToken: string
   onSuccess: () => void
-  onError: (error: Error | string) => void // Типизируем ошибку
-}
-
-declare global {
-  interface Window {
-    YooMoneyCheckoutWidget: YooMoneyCheckoutWidgetConstructor
-  }
+  onError: (error: any) => void
 }
 
 const YooKassaWidget: React.FC<Props> = ({ confirmationToken, onSuccess, onError }) => {
-  useEffect(() => {
-    const initWidget = () => {
-      if (window.YooMoneyCheckoutWidget) {
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  const initWidget = () => {
+    if (typeof window !== "undefined" && window.YooMoneyCheckoutWidget) {
+      try {
         const checkout = new window.YooMoneyCheckoutWidget({
           confirmation_token: confirmationToken,
           full_size: true,
-          error_callback: (error: Error) => {
+          error_callback: (error: any) => {
             console.error("Yookassa Widget Error:", error)
             onError(error)
           },
         })
 
         checkout.on("success", () => {
+          console.log("Payment success")
           onSuccess()
         })
 
         checkout.on("fail", () => {
-          onError(new Error("Payment failed"))
+          onError("Платеж отклонен")
         })
 
         checkout.render("payment-form")
+        setIsLoaded(true)
+      } catch (e) {
+        console.error("Widget Init Error:", e)
+        onError(e)
       }
     }
-
-    if (document.getElementById("yookassa-script")) {
-      initWidget()
-      return
-    }
-
-    const script = document.createElement("script")
-    script.id = "yookassa-script"
-    script.src = "https://yookassa.ru/checkout-widget/v1/checkout-widget.js"
-    script.async = true
-    script.onload = initWidget
-    script.onerror = () => onError(new Error("Не удалось загрузить скрипт ЮKassa"))
-    document.body.appendChild(script)
-  }, [confirmationToken, onSuccess, onError]) // Добавили зависимости для линтера
+  }
 
   return (
-    <div className="w-full bg-white p-2 rounded-lg">
-      <div id="payment-form" className="min-h-[400px] w-full" />
+    <div className="w-full bg-white flex flex-col items-center">
+      {/* Используем компонент Script от Next.js */}
+      <Script
+        src="https://yookassa.ru/checkout-widget/v1/checkout-widget.js"
+        strategy="afterInteractive"
+        onLoad={initWidget}
+        onError={() => onError("Не удалось загрузить скрипт оплаты")}
+      />
+
+      {!isLoaded && (
+        <div className="flex flex-col items-center justify-center p-12">
+          <Preloader className="mb-2" />
+          <p className="text-sm text-gray-500">Загрузка формы оплаты...</p>
+        </div>
+      )}
+
+      <div
+        id="payment-form"
+        className={`w-full min-h-[500px] transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}
+      />
     </div>
   )
 }

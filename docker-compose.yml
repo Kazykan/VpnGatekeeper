@@ -48,6 +48,7 @@ services:
       - YOOKASSA_API_KEY=${YOOKASSA_API_KEY}
       - YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID}
       - NEXT_PUBLIC_TELEGRAM_BOT_URL=${NEXT_PUBLIC_TELEGRAM_BOT_URL}
+      - NEXT_PUBLIC_WEB_APP_URL=${WEB_APP_URL}
 
   celery_worker:
     build: ./django_api

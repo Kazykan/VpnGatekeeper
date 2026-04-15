@@ -68,7 +68,7 @@ def daily_billing_check():
 
     # --- 3. УВЕДОМЛЕНИЯ О РУЧНОЙ ОПЛАТЕ ---
     # Для тех, у кого нет автоплатежа и кто не "подарочный"
-    for days_left in [10, 5, 2]:
+    for days_left in [10, 5, 2, 1]:
         target_date = today + timedelta(days=days_left)
         users_manual = TelegramUser.objects.filter(
             end_date=target_date, autopay_enabled=False, is_gift=False
