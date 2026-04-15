@@ -22,7 +22,6 @@ instance.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 && typeof window !== "undefined") {
       localStorage.removeItem("session")
-      window.location.reload()
     }
     return Promise.reject(error)
   }
