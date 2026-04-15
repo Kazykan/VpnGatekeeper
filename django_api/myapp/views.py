@@ -328,7 +328,7 @@ def user_sub_link_view(request, token):
     )
 
     # Ссылка на бота/личный кабинет
-    response["Profile-Web-Page-Url"] = f"{NEXT_PUBLIC_TELEGRAM_BOT_URL}/pay/{user.sub_token}/"
+    response["Profile-Web-Page-Url"] = f"{NEXT_PUBLIC_WEB_APP_URL}/pay/{user.sub_token}/"
     response["support-url"] = NEXT_PUBLIC_TELEGRAM_BOT_URL
     response["Subscription-Userinfo"] = user_info_header
     response["Profile-Title"] = f"Ruf id_{user.telegram_id}"
